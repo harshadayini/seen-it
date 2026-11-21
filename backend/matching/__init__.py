@@ -1,19 +1,22 @@
 """Seen It matching package initialization.
 
 What this module does:
-    Marks `backend.matching` as a Python package and re-exports Phase 0 shared
-    contracts (`Candidate`, `Item`, `Run`, `Source`, `Totals`, `Preview`,
-    `CartRef`, `validate_run_dict`) and structured logging utilities for P2's
-    matching and evaluation pipeline.
+    Marks `backend.matching` as a Python package and exports the agreed P2
+    public pipeline functions (`search`, `check`, `resolve`, `pick_within_budget`)
+    expected by `backend/api.py`, alongside P2's typed contract models and
+    secret-safe INFO logging helpers.
 
 Use cases:
-    - Clean imports across `backend/matching/`, `backend/api.py`, and `eval/`.
+    - Imported by `backend/api.py` (`from backend.matching import resolve`).
+    - Imported by P2 matching modules and `eval/` evaluation harness.
 
 What this module must NOT do:
-    - Must not execute network calls, mutate global state, or import P1/P3
-      private modules at import time.
+    - Must not execute network calls or import P1/P3 private internals at import time.
 """
 
+from backend.matching.budget import pick_within_budget
+from backend.matching.catalog import search
+from backend.matching.checker import check
 from backend.matching.logging_utils import (
     get_logger,
     log_function_call,
@@ -30,6 +33,7 @@ from backend.matching.models import (
     Totals,
     validate_run_dict,
 )
+from backend.matching.status import resolve
 
 __all__ = [
     "Candidate",
@@ -39,9 +43,13 @@ __all__ = [
     "Run",
     "Source",
     "Totals",
+    "check",
     "get_logger",
     "log_function_call",
     "log_genai_call",
+    "pick_within_budget",
+    "resolve",
     "sanitize_for_log",
+    "search",
     "validate_run_dict",
 ]

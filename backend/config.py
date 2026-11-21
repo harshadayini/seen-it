@@ -245,6 +245,9 @@ class AppConfig:
     shopify_catalog_mcp_url: str
     shopify_auth_token_url: str
     shopify_agent_profile_url: str
+    shopify_default_currency: str
+    shopify_default_country: str
+    shopify_use_compact_view: bool
 
     # Matching & Decisions status thresholds
     thresholds: ThresholdConfig
@@ -405,8 +408,11 @@ def load_config(env_path: Path = DEFAULT_ENV_PATH) -> AppConfig:
         ),
         shopify_agent_profile_url=_get_env_str(
             "SHOPIFY_AGENT_PROFILE_URL",
-            "https://shopify.dev/ucp/agent-profiles/examples/2026-04-08/cart-and-checkout.json",
+            "https://shopify.dev/ucp/agent-profiles/2026-08-25/valid-with-capabilities.json",
         ),
+        shopify_default_currency=_get_env_str("SHOPIFY_DEFAULT_CURRENCY", "USD").upper(),
+        shopify_default_country=_get_env_str("SHOPIFY_DEFAULT_COUNTRY", "US").upper(),
+        shopify_use_compact_view=_get_env_bool("SHOPIFY_USE_COMPACT_VIEW", True),
         thresholds=thresholds,
         max_parallel_gemini=_get_env_int("MAX_PARALLEL_GEMINI", 5),
         retry_max_attempts=_get_env_int("RETRY_MAX_ATTEMPTS", 4),
@@ -434,3 +440,19 @@ def load_config(env_path: Path = DEFAULT_ENV_PATH) -> AppConfig:
 
 # Default singleton configuration loaded on import for convenience.
 CONFIG = load_config()
+
+# Backward-compatible module-level exports expected by `backend/fixture.py` and `tests/test_contract.py`.
+ROOT = PROJECT_ROOT
+FIXTURE_PATH = CONFIG.fixtures_sample_run_path
+SCHEMA_PATH = CONFIG.contracts_schema_path
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_ARGON_MODEL = CONFIG.gemini_argon_model
+GEMINI_FAST_MODEL = CONFIG.gemini_fast_model
+GEMINI_DECISION_MODEL = CONFIG.gemini_decision_model
+GEMINI_IMAGE_MODEL = CONFIG.gemini_image_model
+
+SHOPIFY_CLIENT_ID = os.getenv("SHOPIFY_CLIENT_ID", "")
+SHOPIFY_CLIENT_SECRET = os.getenv("SHOPIFY_CLIENT_SECRET", "")
+SHOPIFY_AGENT_PROFILE_URL = CONFIG.shopify_agent_profile_url
+
