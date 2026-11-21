@@ -170,7 +170,10 @@ class TestPhase0ModelsAndFixture(unittest.TestCase):
         run = Run.from_dict(sample_raw)
         self.assertEqual(run.to_dict(), sample_raw)
         self.assertEqual(len(run.items), 3)
+        self.assertEqual({item.status for item in run.items}, {"exact", "similar", "none"})
+        self.assertTrue(any(item.recovered for item in run.items))
         self.assertEqual(run.items[0].status, "exact")
+        self.assertEqual(run.items[1].status, "similar")
         self.assertTrue(run.items[1].recovered)
         self.assertEqual(run.items[2].status, "none")
 
