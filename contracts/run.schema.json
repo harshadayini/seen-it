@@ -3,73 +3,267 @@
   "$id": "seen-it/run.schema.json",
   "title": "Seen It run",
   "type": "object",
-  "required": ["run_id", "state", "mode", "source", "items", "totals"],
+  "required": [
+    "run_id",
+    "state",
+    "mode",
+    "source",
+    "items",
+    "totals"
+  ],
   "properties": {
-    "run_id": { "type": "string" },
-    "state": { "enum": ["processing", "done", "failed"] },
-    "mode": { "enum": ["video", "desk"] },
+    "run_id": {
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "processing",
+        "done",
+        "failed"
+      ]
+    },
+    "mode": {
+      "enum": [
+        "video",
+        "desk"
+      ]
+    },
     "source": {
       "type": "object",
       "properties": {
-        "video_id": { "type": ["string", "null"] },
-        "duration_s": { "type": ["number", "null"] },
-        "budget_usd": { "type": ["number", "null"] }
+        "video_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duration_s": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "budget_usd": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
       }
     },
-    "items": { "type": "array", "items": { "$ref": "#/$defs/item" } },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
     "totals": {
       "type": "object",
       "properties": {
-        "price": { "type": ["number", "null"] },
-        "within_budget": { "type": ["boolean", "null"] }
+        "price": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "within_budget": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
       }
     }
   },
   "$defs": {
     "candidate": {
       "type": "object",
-      "required": ["title"],
+      "required": [
+        "title"
+      ],
       "properties": {
-        "upid": { "type": ["string", "null"] },
-        "variant_id": { "type": ["string", "null"] },
-        "title": { "type": "string" },
-        "merchant_domain": { "type": ["string", "null"] },
-        "price": { "type": ["number", "null"] },
-        "currency": { "type": ["string", "null"] },
-        "image_url": { "type": ["string", "null"] },
-        "p_same_product": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
-        "p_same_variant": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+        "upid": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "variant_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "merchant_domain": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "price": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "currency": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "image_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "p_same_product": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "p_same_variant": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        }
       }
     },
     "item": {
       "type": "object",
-      "required": ["item_id", "state"],
+      "required": [
+        "item_id",
+        "state"
+      ],
       "properties": {
-        "item_id": { "type": "string" },
-        "state": { "enum": ["processing", "done", "failed"] },
-        "t_start": { "type": ["number", "null"] },
-        "t_end": { "type": ["number", "null"] },
-        "crop_path": { "type": ["string", "null"] },
-        "description": { "type": ["string", "null"] },
-        "attributes": { "type": ["object", "null"], "additionalProperties": true },
-        "query": { "type": ["string", "null"] },
-        "candidates": { "type": "array", "items": { "$ref": "#/$defs/candidate" } },
-        "status": { "enum": ["exact", "similar", "none", null] },
-        "recovered": { "type": ["boolean", "null"] },
-        "preview": {
-          "type": ["object", "null"],
-          "properties": {
-            "image_path": { "type": ["string", "null"] },
-            "fidelity": { "type": ["number", "null"] },
-            "regenerated": { "type": ["boolean", "null"] }
+        "item_id": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "processing",
+            "done",
+            "failed"
+          ]
+        },
+        "t_start": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "t_end": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "crop_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "attributes": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "query": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/candidate"
           }
         },
+        "status": {
+          "enum": [
+            "exact",
+            "similar",
+            "none",
+            null
+          ]
+        },
+        "recovered": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "preview": {
+          "$ref": "#/$defs/preview"
+        },
         "cart": {
-          "type": ["object", "null"],
-          "properties": {
-            "cart_id": { "type": ["string", "null"] },
-            "continue_url": { "type": ["string", "null"] }
-          }
+          "$ref": "#/$defs/cart"
+        }
+      }
+    },
+    "preview": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "image_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fidelity": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "regenerated": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "cart": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "cart_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "continue_url": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     }

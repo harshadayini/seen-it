@@ -1,0 +1,101 @@
+{
+  "run_id": "r_001",
+  "state": "done",
+  "mode": "video",
+  "source": { "video_id": "v_roomtour_01", "duration_s": 94.0, "budget_usd": null },
+  "items": [
+    {
+      "item_id": "i1",
+      "state": "done",
+      "t_start": 12.4,
+      "t_end": 15.0,
+      "crop_path": "frames/r_001/i1.jpg",
+      "description": "matte black arc floor lamp with a brass base and linen shade",
+      "attributes": { "color": "black", "material": "metal", "category": "lighting", "style": "mid-century" },
+      "query": "black arc floor lamp brass base",
+      "candidates": [
+        {
+          "upid": "gid://shopify/p/7Fq2kLm9XaR4",
+          "variant_id": "gid://shopify/ProductVariant/44120398110",
+          "title": "Arc Floor Lamp, Matte Black / Brass",
+          "merchant_domain": "lumen-and-oak.myshopify.com",
+          "price": 129.0,
+          "currency": "USD",
+          "image_url": "https://example.com/catalog/arc-floor-lamp-black.jpg",
+          "p_same_product": 0.91,
+          "p_same_variant": 0.84
+        },
+        {
+          "upid": "gid://shopify/p/3Bv8nTq1ZcP6",
+          "variant_id": "gid://shopify/ProductVariant/44987120344",
+          "title": "Curved Tripod Floor Lamp",
+          "merchant_domain": "northfield-home.myshopify.com",
+          "price": 98.0,
+          "currency": "USD",
+          "image_url": "https://example.com/catalog/curved-tripod-lamp.jpg",
+          "p_same_product": 0.41,
+          "p_same_variant": 0.33
+        }
+      ],
+      "status": "exact",
+      "recovered": false,
+      "preview": { "image_path": "previews/r_001/i1.png", "fidelity": 0.88, "regenerated": false },
+      "cart": { "cart_id": null, "continue_url": null }
+    },
+    {
+      "item_id": "i2",
+      "state": "done",
+      "t_start": 41.2,
+      "t_end": 44.8,
+      "crop_path": "frames/r_001/i2.jpg",
+      "description": "cream boucle accent chair with curved back and tapered walnut legs",
+      "attributes": { "color": "cream", "material": "boucle fabric, walnut", "category": "seating", "style": "modern" },
+      "query": "cream boucle accent chair curved back walnut legs",
+      "candidates": [
+        {
+          "upid": "gid://shopify/p/9Hd5sWe2YkL1",
+          "variant_id": "gid://shopify/ProductVariant/45230917782",
+          "title": "Curved Boucle Armchair, Ivory",
+          "merchant_domain": "softline-furniture.myshopify.com",
+          "price": 289.0,
+          "currency": "USD",
+          "image_url": "https://example.com/catalog/curved-boucle-armchair.jpg",
+          "p_same_product": 0.68,
+          "p_same_variant": 0.55
+        }
+      ],
+      "status": "similar",
+      "recovered": true,
+      "preview": null,
+      "cart": { "cart_id": null, "continue_url": null }
+    },
+    {
+      "item_id": "i3",
+      "state": "done",
+      "t_start": 63.0,
+      "t_end": 64.1,
+      "crop_path": "frames/r_001/i3.jpg",
+      "description": "small hand-thrown speckled ceramic vase, partly hidden behind a plant",
+      "attributes": { "color": "off-white", "material": "ceramic", "category": "decor" },
+      "query": "speckled ceramic bud vase off-white",
+      "candidates": [
+        {
+          "upid": "gid://shopify/p/2Nx6cRu8VjM3",
+          "variant_id": "gid://shopify/ProductVariant/43871650021",
+          "title": "Glazed Stoneware Pitcher",
+          "merchant_domain": "clay-and-co.myshopify.com",
+          "price": 42.0,
+          "currency": "USD",
+          "image_url": "https://example.com/catalog/stoneware-pitcher.jpg",
+          "p_same_product": 0.22,
+          "p_same_variant": 0.15
+        }
+      ],
+      "status": "none",
+      "recovered": false,
+      "preview": null,
+      "cart": { "cart_id": null, "continue_url": null }
+    }
+  ],
+  "totals": { "price": 418.0, "within_budget": true }
+}

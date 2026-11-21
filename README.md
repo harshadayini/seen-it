@@ -1,3 +1,5 @@
 # Seen It
 
-Agent that finds products in a video, verifies matches on Shopify, and builds the cart. Read `CLAUDE.md` first, then `AGENT_RULES.md`.
+Every video becomes shoppable, with confidence you can trust.
+
+See [CLAUDE.md](CLAUDE.md) for full context.
