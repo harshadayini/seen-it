@@ -9,12 +9,12 @@ Must not: match products or call Shopify/Decisions (that is P2), invent items wh
 fails (raise ExtractError instead), print or return the API key, or send sampling params
 (temperature/topP/topK/candidateCount/thinkingBudget) to a Gemini 4 model.
 """
+import hashlib
 import json
 import logging
 import re
 import shutil
 import subprocess
-import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -300,9 +300,33 @@ def items_from_response(text: str, video: Path, run_id: str, locate=None, refine
     return items
 
 
+def cache_dir_for(url: str) -> Path:
+    """Folder (under frames/_cache, gitignored) where the download of this URL is kept for reuse by relook()."""
+    return config.FRAMES_DIR / "_cache" / hashlib.sha1(url.encode()).hexdigest()[:12]
+
+
+def ensure_local(video: str) -> Path:
+    """Return a local file for a video path or URL, downloading a URL once and reusing the cached copy.
+
+    Args: video: local path or http(s) URL. Returns: the local file path. Raises ExtractError if the
+    download fails. Side effects: may download into frames/_cache/<hash>/.
+    """
+    if not video.startswith(("http://", "https://")):
+        return Path(video)
+    try:
+        return _download(video, cache_dir_for(video))
+    except Exception as e:  # noqa: BLE001
+        raise ExtractError(_scrub(f"download failed: {type(e).__name__}: {str(e)[:200]}")) from e
+
+
 def _download(url: str, outdir: Path) -> Path:
-    """Download a video with yt-dlp (max 720p) into outdir. Returns the file path."""
+    """Download a video with yt-dlp (max 720p) into outdir, or return the file already there. Returns the file path."""
     import yt_dlp
+
+    outdir.mkdir(parents=True, exist_ok=True)
+    for existing in sorted(outdir.glob("video.*")):
+        if existing.stat().st_size > 0 and not existing.name.endswith(".part"):
+            return existing
 
     opts = {"outtmpl": str(outdir / "video.%(ext)s"), "format": "mp4[height<=720]/best[height<=720]/best",
             "quiet": True, "no_warnings": True}
@@ -371,25 +395,24 @@ def extract(video_path: str, run_id: str | None = None) -> list[Item]:
         return extract_stub(video_path)
     run_id = run_id or time.strftime("adhoc-%Y%m%d-%H%M%S")
     is_url = video_path.startswith(("http://", "https://"))
-    with tempfile.TemporaryDirectory() as tmp:
-        try:
-            if is_url:
-                with ThreadPoolExecutor(max_workers=1) as pool:  # download while Argon works
-                    dl = pool.submit(_download, video_path, Path(tmp))
-                    try:
-                        text = _call_argon(video_path, None)
-                    except ExtractError as e:
-                        if "no local file" not in str(e):
-                            raise
-                        text = _call_argon(video_path, dl.result())
-                    local = dl.result()
-            else:
-                local = Path(video_path)
-                text = _call_argon(video_path, local)
-        except ExtractError:
-            raise
-        except Exception as e:  # noqa: BLE001
-            raise ExtractError(_scrub(f"{type(e).__name__}: {str(e)[:300]}")) from e
-        items = items_from_response(text, local, run_id)
+    try:
+        if is_url:
+            with ThreadPoolExecutor(max_workers=1) as pool:  # download while Argon works
+                dl = pool.submit(_download, video_path, cache_dir_for(video_path))
+                try:
+                    text = _call_argon(video_path, None)
+                except ExtractError as e:
+                    if "no local file" not in str(e):
+                        raise
+                    text = _call_argon(video_path, dl.result())
+                local = dl.result()
+        else:
+            local = Path(video_path)
+            text = _call_argon(video_path, local)
+    except ExtractError:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise ExtractError(_scrub(f"{type(e).__name__}: {str(e)[:300]}")) from e
+    items = items_from_response(text, local, run_id)
     log.info("extract run=%s items=%d", run_id, len(items))
     return items
