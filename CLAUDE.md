@@ -131,6 +131,7 @@ seen-it/
     matching/             # P2: catalog.py, checker.py, status.py, budget.py
     shopify/              # P2: client wrapper (see section 8)
     api.py                # shared glue (small, touch carefully)
+    config.py             # shared: model IDs, thresholds, URLs, retry limits (read from .env)
   eval/                   # P2: run_eval.py, baseline.py, metrics.py, results/
   web/                    # P3: Next.js app
     components/ app/ lib/
@@ -363,7 +364,7 @@ These are real gaps. Close them in the first 25 minutes.
 **Resources and access:**
 - The **Builder Guide** (Google Drive link on the details page) has model-selection advice, ready-to-run recipes for multi-model loops, the Decisions API, Managed Agents and **agentic video understanding**, and **"what to avoid so your build holds up during a live demo."** P1 reads the video recipes, P2 reads the Decisions API recipe, everyone skims the live-demo section.
 - **Gemini accounts are only given to people who are checked in,** in batches through the day. If one of us hasn't received it, email blerta@cerebralvalley.ai or ask on Discord.
-- Not yet read: **Schedule Overview** (submission deadline, judging start) and the **Shopify-provided resources** under section 6. Add the key times and links here.
+- Not yet read: **Schedule Overview** (submission deadline, judging start) and the **Shopify-provided resources** under section 8. Add the key times and links here.
 
 ### 15b. Extraction output spec (P1)
 Argon should return JSON with one entry per **purchasable product** (not walls, people or generic background), each with: label, normalized attributes (color, material, category, style), the best timestamp, and a normalized bounding box on that frame. We crop the frame with ffmpeg using the box. Cap at about 10 items per video. Local files go through the Gemini Files API; check whether YouTube links work directly.
