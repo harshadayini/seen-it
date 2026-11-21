@@ -1,12 +1,12 @@
 /**
  * Root layout: loads two families (Bodoni Moda for the oversized wordmark and ghost words,
  * Raleway for headings, body and figures), wraps every screen in the shared run/cart store,
- * and adds the bottom tab bar.
+ * and adds the laptop top bar (the old bottom tab bar is kept in components/ but unused).
  */
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import { Bodoni_Moda, Raleway } from "next/font/google";
-import { TabBar } from "@/components/TabBar";
+import { TopBar } from "@/components/TopBar";
 import { RunProvider } from "@/lib/store";
 
 const serif = Bodoni_Moda({ subsets: ["latin"], variable: "--font-serif" });
@@ -23,8 +23,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <a className="skip" href="#main">Skip to content</a>
         <RunProvider>
           <div className="app">
+            <TopBar />
             {children}
-            <TabBar />
           </div>
         </RunProvider>
       </body>
