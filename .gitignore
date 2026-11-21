@@ -4,7 +4,12 @@
 !.env.example
 
 # Generated media and evaluation output
-data/
+data/*
+!data/eval/
+data/eval/*/*
+# only small text outputs are shareable; videos/images stay local
+!data/eval/*/labels.json
+!data/eval/*/probe.json
 frames/
 previews/
 eval/results/raw/
