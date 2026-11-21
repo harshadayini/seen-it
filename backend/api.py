@@ -61,7 +61,7 @@ _BOOT = secrets.token_hex(2)  # makes run ids unique per server start, so a stal
 # Shopify catalog rate-limits (its client retries 429s with backoff).
 RESOLVE_WORKERS = 4
 RELOOK_WORKERS = 3
-RUN_TIME_BUDGET_S = float(os.getenv("RUN_TIME_BUDGET_S", "45"))  # no new second looks after this many seconds
+SECOND_LOOK_BUDGET_S = float(os.getenv("SECOND_LOOK_BUDGET_S", "35"))  # no new second looks start this long after matching finishes
 DEDUPE_WINDOW_S = 180  # a repeated POST /run for the same input returns the run already in progress
 SAVED_RUNS_DIR = config.ROOT / "fixtures" / "saved_runs"
 _SAFE_RUN_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -168,10 +168,11 @@ def _process(run_id: str, req: RunRequest) -> None:
 
         # Second look (relook) for weak items, inside the time budget. The first-pass result is already
         # visible; a second look only replaces it when the status improves, so it can never make things worse.
+        t_second = time.monotonic()  # the second-look budget counts from here, not from the start of the run
         if req.mode == "video" and req.video:
             def second_look(n: int, first: dict) -> tuple[int, dict | None]:
                 """Re-look one weak item; return the improved item, or None to keep the first pass."""
-                if time.monotonic() - t_start > RUN_TIME_BUDGET_S:
+                if time.monotonic() - t_second > SECOND_LOOK_BUDGET_S:
                     log.info("stage=second_look run=%s item=%s skipped: time budget used", run_id, first.get("item_id"))
                     return n, None
                 try:
@@ -187,7 +188,6 @@ def _process(run_id: str, req: RunRequest) -> None:
                 return n, None
 
             weak = [(n, it) for n, it in enumerate(items) if it.get("status") in ("similar", "none")]
-            t_second = time.monotonic()
             with ThreadPoolExecutor(max_workers=RELOOK_WORKERS) as pool:
                 for fut in as_completed([pool.submit(second_look, n, it) for n, it in weak]):
                     n, better = fut.result()
