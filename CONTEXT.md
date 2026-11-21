@@ -3,6 +3,8 @@
 Gemini 4 NYC Hackathon (Cerebral Valley x Google DeepMind), Sat Nov 21.
 Track: **Element 119** + **Shopify bonus**. Recording starts at **3:30 pm**.
 
+**Team:** **P1 = Harsha** (video understanding), **P2 = Sreeja** (matching and evaluation), **P3 = Rachael** (interface, cart, demo). Everywhere below, "P1/P2/P3" means these three people.
+
 Everyone reads this file first. If you change a contract, a function signature, or the scope, edit this file in the same PR.
 
 ---
@@ -134,9 +136,11 @@ seen-it/
 
 | Person | Owns | Main deliverables |
 |---|---|---|
-| **P1** | `backend/video/`, `scripts/` | `extract(video) -> items[]`, `relook(item)`, `preview(frame, product)`, desk prompt |
-| **P2** | `backend/matching/`, `backend/shopify/`, `eval/` | catalog wrapper, Decisions checker, status logic, budget picker, evaluation harness |
-| **P3** | `web/`, demo | player with timed labels, card panel, confidence badges, cart handoff, preview slider, desk tab, recording |
+| **P1** | `backend/video/`, `scripts/`, `eval/baseline.py`, `eval/stress.py` | `extract`, `relook`, `preview`, desk prompt, the baseline run, ffmpeg stitching for the stress curve |
+| **P2** | `backend/matching/`, `backend/shopify/catalog.py`, `eval/run_eval.py`, `eval/metrics.py` | catalog search wrapper, Decisions checker, status logic and thresholds, budget picker, evaluation runner and metrics. **Focus here: matching accuracy is the hardest part of the project.** |
+| **P3** | `web/`, `backend/shopify/cart.py`, `scripts/shopify_smoke.py`, demo | player with timed labels, card panel, confidence badges, **cart and checkout handoff**, preview slider, desk tab, recording |
+
+Why this split: P2's original load (search, checker, cart, eval) was too heavy, so cart and checkout moved to P3, and the baseline and stress stitching moved to P1. Ground-truth labeling is shared (see section 10). Ranking by difficulty is in section 15.
 
 `backend/api.py` is the only shared file. Keep it to thin endpoints that call each person's functions.
 
@@ -154,7 +158,7 @@ search(query: str, filters: dict) -> list[Candidate]
 check(item: Item, candidates: list[Candidate]) -> list[Candidate]   # fills p_same_*
 resolve(item: Item) -> Item                          # search + check + status (+ relook trigger)
 pick_within_budget(items: list[Item], budget: float) -> list[Item]
-create_cart(merchant_domain: str, variant_id: str, qty: int = 1) -> dict
+create_cart(merchant_domain: str, variant_id: str, qty: int = 1) -> dict   # P3, backend/shopify/cart.py
 
 # API endpoints (api.py)
 POST /run         {video | photo, mode, budget?}  ->  run.json
@@ -235,6 +239,7 @@ Tools needed: Python 3.11+, Node 20+, `ffmpeg`, `yt-dlp` (for downloading videos
 
 - **Test set:** 18 videos (room tours or clothing hauls from brands that sell direct on Shopify). Ground truth comes from the product links in each creator's description. Check every link with `shop catalog lookup '<link>'` and keep only those that resolve to a catalog product. **12 build set, 6 held out.** Do not look at the held-out videos until after thresholds are frozen. Mention on the slide that the labels did not come from us. Each person collects 6 videos in the first 25 minutes.
 - **Baseline:** one middle frame, one Gemini call, take the top search result, no checking.
+- **Google Lens comparison (manual, Rachael, after 2:15):** a second baseline on a subset (about 4 items from each of the 6 held-out videos). Same frame and same crop as our pipeline. Do **not** scrape or automate Lens. Score its top 3 results against the ground-truth labels (correct only if it is the exact product), recording separately "found at any retailer" and "found on Shopify"; for variants, record only whether the color matches. Report Lens, the single-frame baseline and our system in one chart. If Lens wins on some items (it searches the whole web), say so.
 - **Metrics:** items found, exact-product match, color/variant accuracy, invented items (judged by hand), and a 3-row calibration table (does 0.8 confidence mean about 80% correct?).
 - **Recovery before/after:** run with and without `relook`. This is our "what we changed" result.
 - **Stress curve:** stitch clips with ffmpeg into 30 s, 2 min and 5 min videos. Ground truth is the union of the clips' labels. Plot recall against length.
@@ -261,7 +266,18 @@ Check the participant guide for a video length limit (past Gemini events asked f
 
 ---
 
-## 12. Demo script (about 3 min)
+## 12. Demos: live (3 min, 35% of the score) and recorded (1 min, submission)
+
+**Two different demos.** Judges grade the **live** one on real, unrehearsed inputs, so the live version matters most.
+
+Live-demo rules for us:
+- **Be ready to take any video a judge names or hands us.** Keep a "paste any link" path that works, and a pre-run fallback if it fails.
+- **Speed is part of the score (Gemini 4 and Decisions API use, 20%).** Show items appearing as they are found, and show real latency numbers on screen (for example "200 candidates checked in 0.3 s").
+- **Never spend the 3 minutes waiting.** Start the run, talk over the first results, and don't make the judge sit through the full pipeline.
+- Show the **evidence slide** (baseline vs ours, failures) in the last 30 seconds. That's the 25% "proof it works" criterion.
+- Keep the UI video-first. No dashboard.
+
+### 12a. Live script (3 min)
 
 1. **0:00-0:20.** "You see a lamp in a video. A text description loses the exact color and finish, which is what you need."
 2. **0:20-1:30.** Live run on a fresh video. Items appear with confidence badges, one gets upgraded by the second look, one stays "no confident match," then the cart.
@@ -269,6 +285,17 @@ Check the participant guide for a video length limit (past Gemini events asked f
 4. **1:55-2:15.** Desk mode on our real desk: "make this warmer, under $150." Three picks, total shown.
 5. **2:15-2:50.** Results chart, failure gallery, stress curve.
 6. **2:50-3:00.** Architecture slide and close.
+
+### 12b. Recorded submission video (1 min, recorded at 3:30)
+
+Must show only features and code we built today.
+
+1. **0:00-0:10.** Hook: "You see a lamp in a video. A text description loses the exact color and finish."
+2. **0:10-0:40.** One run on a fresh video: items appear with confidence, one gets upgraded by the second look, one stays "no confident match," then the cart.
+3. **0:40-0:52.** The evidence: baseline vs ours on videos we never tuned on, plus one failure and the fix.
+4. **0:52-1:00.** One-line architecture (which Gemini 4 model does what, plus the Decisions API) and close.
+
+Cut "See it here" and desk mode from the 1-minute version unless they are rock solid; they belong in the live demo.
 
 ---
 
@@ -299,3 +326,82 @@ Check the participant guide for a video length limit (past Gemini events asked f
 - [ ] Decisions API: multi-image input works (or fallback chosen)
 - [ ] `fixtures/sample_run.json` committed and the UI renders it
 - [ ] Each person has 6 eval videos with verified ground-truth links
+- [ ] Someone has read guide sections 5 and 7-9 (see section 16) and pasted the key rules into this file
+
+---
+
+## 15. Difficulty ranking (hardest first)
+
+| # | Area | Owner | Why it's hard | Risk if it fails |
+|---|---|---|---|---|
+| 1 | **Finding the exact product** (text query to the right product among billions, then verifying it) | P2 | Retrieval recall is limited by what the catalog search returns. A good query is not enough if the product is not in the top 10. Calibrating confidence is subtle. | Everything downstream is wrong. This is the core claim. |
+| 2 | **Reliable item extraction from video** (right items, right timestamps, a usable crop) | P1 | Needs bounding boxes or good key frames, and must ignore walls, people and background clutter. Timestamps drift on fast cuts. | Bad crops mean bad queries and bad checks. |
+| 3 | **Ground truth and evaluation** | P2 (metrics), all (labeling) | Not technically hard, but slow: collecting 18 videos with verified product links is where the time goes. Easy to leak held-out data into tuning. | No credible chart, which the guide treats as a core requirement. |
+| 4 | **"See it here" preview with fidelity check** | P1 | Image editing changes colors and shapes unpredictably, and the Decisions check has to catch that. | Cuttable. Costs demo wow if it goes. |
+| 5 | **Relook recovery loop** | P1 (relook), P2 (trigger) | Depends on #1 and #2 already working. Needs a visible before/after. | Weakens the "where it breaks and how it recovers" story. |
+| 6 | **Shopify cart and checkout** | P3 | Low logic, high unknowns: agent profile acceptance, per-merchant endpoint discovery, rate limits, "coming soon" checkout tools. | Fallback exists: show the `continue_url`. |
+| 7 | **Frontend** (timed labels over a video, cards, badges, live updates) | P3 | Lots of work but well understood. Real-time updating while the backend runs is the fiddly part. | Looks rough, but can be polished late. |
+| 8 | **Desk mode** | P1 prompt, P2 budget, P3 tab | Mostly reuses the pipeline. Style is not measurable, so claim only what we can check (budget, preview fidelity). | Cut first. |
+| 9 | **Demo recording** | P3 | Easy technically, high stakes. Live runs on unseen inputs can fail on camera. | Mitigate with a rehearsed run plus saved fallbacks. |
+
+Load check: P2 has the single hardest area and should not be given anything else big. P1 has two of the top five but they are sequential (extract first, then relook, then preview), so the load is manageable if extraction is done by 1:00. P3 has the most surface area but the least risk, which is why they also own the demo.
+
+---
+
+## 16. What this file still does not settle
+
+These are real gaps. Close them in the first 25 minutes.
+
+### 16a. Rules, submission and judging (from the participant guide)
+
+**Rules (violations mean disqualification):**
+- **Repo must be public.** Team size 1-4.
+- **Demo must only show what we built today.** Judges must be able to tell our work from existing tools. No existing project presented as ours. Our git history must start today.
+- **No code, data or assets we don't have rights to.** Do not commit other people's videos, merchant images, or scraped data. Commit URLs and labels only. For demos, prefer footage we filmed ourselves or openly licensed footage.
+- **Banned project types ("strictly no"):** image analyzers, basic RAG, Streamlit apps, any project where **a dashboard is the main feature**, chatbots, medical advice, personality analyzers, sports analyzers or coaches. **Framing risk for us:** "finds items in a video" can read as an image analyzer. We pitch it as an **agent that finds, verifies, recovers and checks out**, not an analyzer. The UI is video-first with a cart, **not a dashboard of cards and metrics.** The eval chart is evidence, not the interface.
+
+**Submission:** one form, with a **1-minute demo video** (only features and code we built today). Before submitting, check that the repo is public, the demo link opens, and **all three of us are added on the submission page.**
+
+**Judging:** round one is a **3-minute LIVE demo + 2 minutes of Q&A** in a room; the top six demo on stage in round two (same criteria, equal weights).
+
+| Criterion | Weight | What they ask |
+|---|---|---|
+| **Live demo** | 35% | Does it work live on **real, unrehearsed inputs**? Not slides or a Figma file. |
+| **Proof it works** | 25% | Evidence beyond the demo: baseline test, an honest look at failures, or a plan the agent checks its own output against. |
+| **Creativity** | 20% | Takes on a problem others avoid; goes beyond text in a way that matters. |
+| **Gemini 4 and Decisions API use** | 20% | At least two Gemini 4 models with clear jobs plus the Decisions API; how far we push reasoning, **speed** or multimodality. |
+
+**Prizes:** 1st $7,500, 2nd $5,000, 3rd $2,500, **Best use of Managed Agents $5,000**, **Best use of Shopify $2,500 Shop Cash.** We are not using Managed Agents (optional idea: run each item's resolve loop as a Managed Agent, only if it comes cheap).
+
+**Resources and access:**
+- The **Builder Guide** (Google Drive link on the details page) has model-selection advice, ready-to-run recipes for multi-model loops, the Decisions API, Managed Agents and **agentic video understanding**, and **"what to avoid so your build holds up during a live demo."** P1 reads the video recipes, P2 reads the Decisions API recipe, everyone skims the live-demo section.
+- **Gemini accounts are only given to people who are checked in,** in batches through the day. If one of us hasn't received it, email blerta@cerebralvalley.ai or ask on Discord.
+- Not yet read: **Schedule Overview** (submission deadline, judging start) and the **Shopify-provided resources** under section 6. Add the key times and links here.
+
+### 16b. Extraction output spec (P1)
+Argon should return JSON with one entry per **purchasable product** (not walls, people or generic background), each with: label, normalized attributes (color, material, category, style), the best timestamp, and a normalized bounding box on that frame. We crop the frame with ffmpeg using the box. Cap at about 10 items per video. Local files go through the Gemini Files API; check whether YouTube links work directly.
+
+### 16c. Ground-truth format (all)
+`data/eval/<video_id>/labels.json`:
+```json
+{ "video_id": "v01", "split": "build | heldout", "source_url": "...",
+  "products": [ { "name": "...", "product_url": "...", "upid": null, "variant_id": null, "approx_t": 42.0 } ] }
+```
+Fill `upid` and `variant_id` using `shop catalog lookup` where it resolves. Keep the `split` field honest: **never tune on `heldout`.**
+
+### 16d. Latency and live updates (P1 + P3)
+A run takes a while. `POST /run` returns a `run_id` immediately, the backend writes `run.json` incrementally, and the UI polls `GET /run/<id>` about once per second so items appear as they finish. **This needs one addition to the contract: a top-level `state` field (`processing | done | failed`) and a per-item `state`.** Treat it as a contract change (all three approve). Cap parallel Gemini calls (about 5) with retries.
+
+### 16e. Desk mode details (P1, P2)
+P1 returns "slots" (lamp, plant, desk mat, ...). P2 takes the top 3 candidates per slot, scores each on style fit and space fit via the Decisions API, then brute-forces the best-scoring combination under the budget with at most one item per slot. P3 shows the total.
+
+### 16f. Demo logistics (P3)
+Run locally; no deployment needed. Decide now who drives the screen, which screen recorder, and which mic. Keep the last good run of each demo input saved as a fallback, and rehearse with a video nobody has seen.
+
+### 16g. Still unknown (verify, then record answers here)
+- Exact model IDs for the fast model and the image-edit model
+- Whether Argon accepts YouTube links
+- Whether the Decisions API accepts multiple images per input
+- Whether the example agent profile is accepted by Shopify
+- Whether `create_cart` works on the merchants our test products come from
+- Rate limits on our Gemini key and on Shopify without a Catalog key
