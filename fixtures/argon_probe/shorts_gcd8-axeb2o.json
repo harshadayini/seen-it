@@ -1,0 +1,171 @@
+{
+  "input": "https://youtube.com/shorts/gcd8-axeb2o",
+  "model": "gemini-4-argon",
+  "seconds": 17.4,
+  "usage": "prompt_tokens=1072 output_tokens=759",
+  "shape_ok": true,
+  "shape_problems": [],
+  "items": [
+    {
+      "label": "monitor light bar",
+      "attributes": {
+        "color": "black",
+        "material": "metal, plastic",
+        "category": "lighting",
+        "style": "modern"
+      },
+      "timestamp_s": 5,
+      "bbox": [
+        0.165,
+        0.164,
+        0.303,
+        0.935
+      ]
+    },
+    {
+      "label": "computer monitor",
+      "attributes": {
+        "color": "black",
+        "material": "plastic, glass",
+        "category": "electronics",
+        "style": "modern"
+      },
+      "timestamp_s": 5,
+      "bbox": [
+        0.275,
+        0.251,
+        0.728,
+        0.858
+      ]
+    },
+    {
+      "label": "wooden monitor stand",
+      "attributes": {
+        "color": "brown, black",
+        "material": "wood, metal",
+        "category": "furniture",
+        "style": "modern"
+      },
+      "timestamp_s": 5,
+      "bbox": [
+        0.623,
+        0.164,
+        0.806,
+        0.985
+      ]
+    },
+    {
+      "label": "smart speaker",
+      "attributes": {
+        "color": "black",
+        "material": "fabric, plastic",
+        "category": "electronics",
+        "style": "modern"
+      },
+      "timestamp_s": 5,
+      "bbox": [
+        0.635,
+        0.435,
+        0.707,
+        0.577
+      ]
+    },
+    {
+      "label": "mini alarm clock",
+      "attributes": {
+        "color": "blue",
+        "material": "metal, glass",
+        "category": "decor",
+        "style": "retro"
+      },
+      "timestamp_s": 5,
+      "bbox": [
+        0.583,
+        0.236,
+        0.645,
+        0.306
+      ]
+    },
+    {
+      "label": "action figure",
+      "attributes": {
+        "color": "multicolor",
+        "material": "plastic",
+        "category": "decor",
+        "style": "collectible"
+      },
+      "timestamp_s": 5,
+      "bbox": [
+        0.654,
+        0.779,
+        0.737,
+        0.871
+      ]
+    },
+    {
+      "label": "wireless keyboard",
+      "attributes": {
+        "color": "black",
+        "material": "plastic",
+        "category": "electronics",
+        "style": "modern"
+      },
+      "timestamp_s": 5,
+      "bbox": [
+        0.697,
+        0.042,
+        0.831,
+        0.502
+      ]
+    },
+    {
+      "label": "ergonomic wireless mouse",
+      "attributes": {
+        "color": "grey",
+        "material": "plastic",
+        "category": "electronics",
+        "style": "modern"
+      },
+      "timestamp_s": 5,
+      "bbox": [
+        0.768,
+        0.405,
+        0.885,
+        0.639
+      ]
+    },
+    {
+      "label": "desk mat",
+      "attributes": {
+        "color": "white",
+        "material": "synthetic leather",
+        "category": "accessories",
+        "style": "minimalist"
+      },
+      "timestamp_s": 5,
+      "bbox": [
+        0.696,
+        0.0,
+        0.992,
+        0.903
+      ]
+    },
+    {
+      "label": "Over-ear headphones on stand",
+      "attributes": {
+        "color": "black",
+        "material": "plastic, metal",
+        "category": "electronics",
+        "style": "modern"
+      },
+      "timestamp_s": 6,
+      "bbox": [
+        0.434,
+        0.032,
+        0.562,
+        0.194
+      ]
+    }
+  ],
+  "raw_text": "[{\"label\": \"monitor light bar\", \"attributes\": {\"color\": \"black\", \"material\": \"metal, plastic\", \"category\": \"lighting\", \"style\": \"modern\"}, \"timestamp_s\": 5, \"bbox\": [0.165, 0.164, 0.303, 0.935]}, {\"label\": \"computer monitor\", \"attributes\": {\"color\": \"black\", \"material\": \"plastic, glass\", \"category\": \"electronics\", \"style\": \"modern\"}, \"timestamp_s\": 5, \"bbox\": [0.275, 0.251, 0.728, 0.858]}, {\"label\": \"wooden monitor stand\", \"attributes\": {\"color\": \"brown, black\", \"material\": \"wood, metal\", \"category\": \"furniture\", \"style\": \"modern\"}, \"timestamp_s\": 5, \"bbox\": [0.623, 0.164, 0.806, 0.985]}, {\"label\": \"smart speaker\", \"attributes\": {\"color\": \"black\", \"material\": \"fabric, plastic\", \"category\": \"electronics\", \"style\": \"modern\"}, \"timestamp_s\": 5, \"bbox\": [0.635, 0.435, 0.707, 0.577]}, {\"label\": \"mini alarm clock\", \"attributes\": {\"color\": \"blue\", \"material\": \"metal, glass\", \"category\": \"decor\", \"style\": \"retro\"}, \"timestamp_s\": 5, \"bbox\": [0.583, 0.236, 0.645, 0.306]}, {\"label\": \"action figure\", \"attributes\": {\"color\": \"multicolor\", \"material\": \"plastic\", \"category\": \"decor\", \"style\": \"collectible\"}, \"timestamp_s\": 5, \"bbox\": [0.654, 0.779, 0.737, 0.871]}, {\"label\": \"wireless keyboard\", \"attributes\": {\"color\": \"black\", \"material\": \"plastic\", \"category\": \"electronics\", \"style\": \"modern\"}, \"timestamp_s\": 5, \"bbox\": [0.697, 0.042, 0.831, 0.502]}, {\"label\": \"ergonomic wireless mouse\", \"attributes\": {\"color\": \"grey\", \"material\": \"plastic\", \"category\": \"electronics\", \"style\": \"modern\"}, \"timestamp_s\": 5, \"bbox\": [0.768, 0.405, 0.885, 0.639]}, {\"label\": \"desk mat\", \"attributes\": {\"color\": \"white\", \"material\": \"synthetic leather\", \"category\": \"accessories\", \"style\": \"minimalist\"}, \"timestamp_s\": 5, \"bbox\": [0.696, 0.0, 0.992, 0.903]}, {\"label\": \"Over-ear headphones on stand\", \"attributes\": {\"color\": \"black\", \"material\": \"plastic, metal\", \"category\": \"electronics\", \"style\": \"modern\"}, \"timestamp_s\": 6, \"bbox\": [0.434, 0.032, 0.562, 0.194]}]"
+}
