@@ -119,3 +119,36 @@ def scene_frame(scene_id: str, index: int = 0) -> str:
     if not (config.ROOT / rel).is_file():
         raise SceneError("unknown scene or frame")
     return rel
+
+
+MAX_VIDEO_BYTES = 300_000_000
+
+
+def uploads_dir() -> Path:
+    """Folder for videos uploaded for analysis (data/uploads, gitignored, local only)."""
+    return config.ROOT / "data" / "uploads"
+
+
+def finish_video_upload(path: Path) -> dict:
+    """Check a streamed upload is a real video and give it a proper extension.
+
+    Args: path: the file the API streamed to disk. Returns {"video": absolute path, "bytes", "duration_s"}.
+    Raises SceneError (and deletes the file) if ffprobe cannot read a video stream or the clip is under a second.
+    The extension (mp4 or webm) is chosen from what the container really is, so Gemini gets the right MIME type.
+    """
+    r = _run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+              "stream=codec_type:format=format_name,duration", "-of", "default=nw=1", str(path)], timeout=30)
+    info = r.stdout.decode(errors="replace")
+    fmt = next((ln.split("=", 1)[1] for ln in info.splitlines() if ln.startswith("format_name=")), "")
+    dur = next((ln.split("=", 1)[1] for ln in info.splitlines() if ln.startswith("duration=")), "")
+    try:
+        seconds = float(dur)
+    except ValueError:
+        seconds = 0.0
+    if r.returncode != 0 or "codec_type=video" not in info or seconds < 1.0:
+        path.unlink(missing_ok=True)
+        raise SceneError("that file is not a video we can read (or it is shorter than a second)")
+    final = path.with_suffix(".webm" if "webm" in fmt or "matroska" in fmt else ".mp4")
+    path.rename(final)
+    log.info("video upload saved bytes=%d duration=%.1f", final.stat().st_size, seconds)
+    return {"video": str(final), "bytes": final.stat().st_size, "duration_s": round(seconds, 1)}

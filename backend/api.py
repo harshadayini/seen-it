@@ -286,6 +286,36 @@ async def post_scene(request: Request) -> dict:
         raise HTTPException(422, str(e)) from e
 
 
+@app.post("/upload")
+async def post_upload(request: Request) -> dict:
+    """Upload a local video for analysis as the raw request body (up to 300 MB).
+
+    Returns {video, bytes, duration_s}; pass `video` to POST /run to analyze it. Stored under data/uploads on the
+    server (gitignored). A file that is not a readable video of at least one second is rejected with 422.
+    """
+    import secrets
+
+    folder = scenes.uploads_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{secrets.token_hex(6)}.upload"
+    size = 0
+    try:
+        with path.open("wb") as f:
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > scenes.MAX_VIDEO_BYTES:
+                    raise HTTPException(413, f"the video is larger than {scenes.MAX_VIDEO_BYTES // 1_000_000} MB")
+                f.write(chunk)
+        if size == 0:
+            raise HTTPException(422, "the upload is empty")
+        return scenes.finish_video_upload(path)
+    except scenes.SceneError as e:
+        raise HTTPException(422, str(e)) from e
+    finally:
+        if path.exists():  # an error left the raw file behind
+            path.unlink(missing_ok=True)
+
+
 def _run_preview(req: PreviewRequest, scene: str, image_url: str) -> None:
     """Make the preview in the background and record the outcome in PREVIEW_JOBS. Never raises."""
     key = (req.run_id, req.item_id)

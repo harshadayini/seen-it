@@ -46,7 +46,8 @@ and do not use vague style words like "modern" or "sleek". Return ONLY a JSON ar
 {"id": str, "query": str}.
 Products:
 """
-BOX_WORKERS = 5  # parallel still-frame calls (AGENT_RULES: cap about 5)
+BOX_WORKERS = 5
+INLINE_VIDEO_MAX_BYTES = 18_000_000  # under Gemini's 20 MB inline limit (with room for the prompt)  # parallel still-frame calls (AGENT_RULES: cap about 5)
 
 
 class ExtractError(RuntimeError):
@@ -368,6 +369,9 @@ def _call_argon(source: str, local: Path | None) -> str:
                 log.warning("direct URL failed (%s); falling back to Files API", _scrub(str(e))[:200])
         if local is None:
             raise ExtractError("no local file to upload")
+        if local.stat().st_size <= INLINE_VIDEO_MAX_BYTES:  # small clip: send the bytes directly, no Files API wait
+            mime = "video/webm" if local.suffix.lower() == ".webm" else "video/mp4"
+            return ask(types.Part.from_bytes(data=local.read_bytes(), mime_type=mime))
         f = client.files.upload(file=str(local))
         while getattr(f.state, "name", str(f.state)) == "PROCESSING":
             time.sleep(2)
