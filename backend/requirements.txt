@@ -1,0 +1,11 @@
+# Backend Python 3.11+ dependencies for Seen It
+# Note: Phase 0 core modules (config, models, logging_utils) use Python 3.11 stdlib
+# so they run and pass tests even before installing external packages.
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+httpx>=0.27.0
+google-genai>=1.10.0
+jsonschema>=4.23.0
+python-dotenv>=1.0.1
+pytest>=8.3.0
+matplotlib>=3.9.0
