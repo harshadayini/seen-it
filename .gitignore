@@ -16,7 +16,7 @@ eval/results/raw/
 
 # Dependencies, caches, and build output
 node_modules/
-.venv/
+.venv
 __pycache__/
 *.py[cod]
 .next/
