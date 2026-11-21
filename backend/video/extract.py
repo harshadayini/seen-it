@@ -1,8 +1,10 @@
 """P1: find purchasable items in a video with Gemini 4 Argon, then crop each one.
 
-Does: send the video to Argon (CLAUDE.md 15b spec), parse the JSON, cut the frame at each
-item's timestamp with ffmpeg, crop it to the normalized bbox, save frames/<run_id>/<item_id>.jpg
-and return Items shaped like fixtures/sample_run.json.
+Does, in two passes: (1) send the VIDEO to Argon for labels, attributes and a best timestamp
+per item (its video boxes are rough, so they are not used); (2) cut a still frame at each
+timestamp with ffmpeg and ask Argon for tight boxes on that STILL (0-1000 scale, accurate),
+crop to the box, save frames/<run_id>/<item_id>.jpg and return Items shaped like
+fixtures/sample_run.json. An item with no usable box keeps the full frame as its crop.
 Must not: match products or call Shopify/Decisions (that is P2), invent items when the call
 fails (raise ExtractError instead), print or return the API key, or send sampling params
 (temperature/topP/topK/candidateCount/thinkingBudget) to a Gemini 4 model.
@@ -10,6 +12,7 @@ fails (raise ExtractError instead), print or return the API key, or send samplin
 import json
 import logging
 import re
+import shutil
 import subprocess
 import tempfile
 import time
@@ -29,9 +32,14 @@ PROMPT = """You are watching a video. List every PURCHASABLE product visible in 
 or generic background. At most 10 items. Return ONLY a JSON array; each entry:
 {"label": str,
  "attributes": {"color": str, "material": str, "category": str, "style": str},
- "timestamp_s": number,   // the single best moment in the video to see this product
- "bbox": [ymin, xmin, ymax, xmax]}  // normalized 0-1 box around the product in the frame at timestamp_s
+ "timestamp_s": number}   // the single best moment in the video to see this product
 """
+BOX_PROMPT = """This is one still image. For each product below, return a tight bounding box
+around it. Return ONLY a JSON array of {"id": str, "bbox": [ymin, xmin, ymax, xmax]} with
+integer coordinates normalized 0-1000. Leave out any product that is not clearly visible.
+Products:
+"""
+BOX_WORKERS = 5  # parallel still-frame calls (AGENT_RULES: cap about 5)
 
 
 class ExtractError(RuntimeError):
@@ -68,7 +76,7 @@ def parse_items(text: str) -> list[dict]:
     """Parse Argon's response text into valid raw entries, dropping malformed ones.
 
     Args: text: the model's JSON (code fences tolerated). Returns: at most MAX_ITEMS entries
-    that have a label, attributes, numeric timestamp_s and a valid bbox. Raises ExtractError
+    that have a label, attributes and a non-negative numeric timestamp_s (any bbox is ignored). Raises ExtractError
     if the text is not a JSON array.
     """
     try:
@@ -80,7 +88,7 @@ def parse_items(text: str) -> list[dict]:
     good = []
     for n, e in enumerate(data):
         if (isinstance(e, dict) and e.get("label") and isinstance(e.get("attributes"), dict)
-                and isinstance(e.get("timestamp_s"), (int, float)) and _valid_bbox(e.get("bbox"))):
+                and isinstance(e.get("timestamp_s"), (int, float)) and e["timestamp_s"] >= 0):
             good.append(e)
         else:
             log.warning("dropping malformed Argon entry %d", n)
@@ -97,41 +105,126 @@ def pad_bbox(bbox: list[float], pad: float) -> list[float]:
     return [max(0.0, ymin - dy), max(0.0, xmin - dx), min(1.0, ymax + dy), min(1.0, xmax + dx)]
 
 
-def _crop(video: Path, ts: float, bbox: list[float], out: Path) -> bool:
-    """Cut one frame at ts seconds and crop it to bbox (padded by config.CROP_PADDING) with ffmpeg. Returns True if out was written.
+def _grab_frame(video: Path, ts: float, out: Path) -> bool:
+    """Save the full frame at ts seconds as a jpg with ffmpeg. Returns True if out was written.
 
-    Side effects: creates out's folder and writes the jpg.
+    Side effects: creates out's folder and writes the file.
     """
-    ymin, xmin, ymax, xmax = pad_bbox(bbox, config.CROP_PADDING)
-    vf = f"crop=iw*{xmax - xmin:.4f}:ih*{ymax - ymin:.4f}:iw*{xmin:.4f}:ih*{ymin:.4f}"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.unlink(missing_ok=True)
     cmd = ["ffmpeg", "-v", "error", "-ss", f"{ts:.3f}", "-i", str(video), "-frames:v", "1",
-           "-vf", vf, "-q:v", "2", "-y", str(out)]
+           "-q:v", "2", "-y", str(out)]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0 or not out.exists():
-        log.warning("ffmpeg could not crop frame at %.2fs: %s", ts, r.stderr.strip()[:200])
+        log.warning("ffmpeg could not read a frame at %.2fs: %s", ts, r.stderr.strip()[:200])
         return False
     return True
 
 
-def items_from_response(text: str, video: Path, run_id: str) -> list[Item]:
-    """Turn Argon's response text plus the local video into Items with crops on disk.
+def _crop_frame(frame: Path, bbox: list[float], out: Path) -> bool:
+    """Crop a saved frame to bbox (padded by config.CROP_PADDING) into out. Returns True if written."""
+    ymin, xmin, ymax, xmax = pad_bbox(bbox, config.CROP_PADDING)
+    vf = f"crop=iw*{xmax - xmin:.4f}:ih*{ymax - ymin:.4f}:iw*{xmin:.4f}:ih*{ymin:.4f}"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.unlink(missing_ok=True)
+    r = subprocess.run(["ffmpeg", "-v", "error", "-i", str(frame), "-vf", vf, "-q:v", "2", "-y", str(out)],
+                       capture_output=True, text=True)
+    return r.returncode == 0 and out.exists()
 
-    Args: text: Argon JSON; video: local video file for ffmpeg; run_id: names the frames folder.
-    Returns: Items (status None until P2's resolve). Entries whose crop fails are skipped.
+
+def parse_boxes(text: str) -> dict[str, list[float]]:
+    """Parse the still-frame box response into {item_id: [ymin, xmin, ymax, xmax]} on a 0-1 scale.
+
+    Args: text: Argon JSON of {"id", "bbox"} entries on a 0-1000 scale. Returns: only valid
+    boxes (anything malformed or empty is dropped). Raises ExtractError if not a JSON array.
+    """
+    try:
+        data = json.loads(re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.M).strip())
+    except json.JSONDecodeError as e:
+        raise ExtractError(f"box response is not valid JSON: {e}") from e
+    if not isinstance(data, list):
+        raise ExtractError("box response is not a JSON array")
+    boxes: dict[str, list[float]] = {}
+    for e in data:
+        b = e.get("bbox") if isinstance(e, dict) else None
+        if isinstance(e, dict) and isinstance(e.get("id"), str) and isinstance(b, list) and len(b) == 4 \
+                and all(isinstance(v, (int, float)) for v in b):
+            norm = [v / 1000 for v in b]
+            if _valid_bbox(norm):
+                boxes[e["id"]] = norm
+    return boxes
+
+
+def _locate_boxes(frame: Path, group: list[tuple[str, str]]) -> dict[str, list[float]]:
+    """Ask Argon for tight boxes on one still frame (pass 2).
+
+    Args: frame: jpg path; group: [(item_id, label)] for items best seen in this frame.
+    Returns: {item_id: normalized 0-1 box} for those it found; {} on any failure (the caller
+    then keeps the full frame). Side effects: one Argon call, logged at INFO.
+    """
+    from google import genai
+    from google.genai import types
+
+    prompt = BOX_PROMPT + "\n".join(f'{i}: {label}' for i, label in group)
+    try:
+        client = genai.Client(api_key=config.GEMINI_API_KEY)
+        t0 = time.monotonic()
+        resp = client.models.generate_content(
+            model=config.GEMINI_ARGON_MODEL,
+            contents=[types.Content(role="user", parts=[
+                types.Part.from_bytes(data=frame.read_bytes(), mime_type="image/jpeg"), types.Part(text=prompt)])],
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+        )
+        log.info("argon box call items=%d seconds=%.1f", len(group), time.monotonic() - t0)
+        return parse_boxes(resp.text or "")
+    except Exception as e:  # noqa: BLE001  a failed box call must not lose the item
+        log.warning("box call failed (%s); using full frames", _scrub(f"{type(e).__name__}: {str(e)[:200]}"))
+        return {}
+
+
+def items_from_response(text: str, video: Path, run_id: str, locate=None) -> list[Item]:
+    """Turn Argon's video response plus the local video into Items with crops on disk.
+
+    Args: text: pass-1 JSON; video: local video for ffmpeg; run_id: names the frames folder;
+    locate: function(frame, [(item_id, label)]) -> {item_id: box}; defaults to the Argon still
+    pass (tests pass a fake). Returns: Items (status None until P2's resolve), one per entry
+    whose frame could be read. Items with no box get the full frame as their crop.
     Side effects: writes frames/<run_id>/<item_id>.jpg.
     """
-    items: list[Item] = []
+    locate = locate or _locate_boxes
+    entries = []
     for e in parse_items(text):
-        item_id = f"i{len(items) + 1}"
-        crop_rel = f"frames/{run_id}/{item_id}.jpg"
-        if not _crop(video, float(e["timestamp_s"]), e["bbox"], config.ROOT / crop_rel):
+        entries.append({**e, "item_id": f"i{len(entries) + 1}", "ts": float(e["timestamp_s"])})
+    groups: dict[float, list[dict]] = {}
+    for e in entries:
+        groups.setdefault(round(e["ts"], 1), []).append(e)
+
+    out_dir = config.ROOT / "frames" / run_id
+    frames: dict[float, Path] = {}
+    for ts, grp in groups.items():
+        f = out_dir / f"_frame_{ts:.1f}.jpg"
+        if _grab_frame(video, grp[0]["ts"], f):
+            frames[ts] = f
+    with ThreadPoolExecutor(max_workers=BOX_WORKERS) as pool:
+        futs = {ts: pool.submit(locate, frames[ts], [(e["item_id"], e["label"]) for e in groups[ts]])
+                for ts in frames}
+        boxes = {ts: fut.result() for ts, fut in futs.items()}
+
+    items: list[Item] = []
+    for e in entries:
+        key = round(e["ts"], 1)
+        if key not in frames:
             continue
-        ts = float(e["timestamp_s"])
+        crop_rel = f"frames/{run_id}/{e['item_id']}.jpg"
+        box = boxes[key].get(e["item_id"])
+        if box and _crop_frame(frames[key], box, config.ROOT / crop_rel):
+            pass
+        else:
+            log.warning("no usable box for %s (%s); keeping the full frame", e["item_id"], e["label"])
+            shutil.copyfile(frames[key], config.ROOT / crop_rel)
         items.append({
-            "item_id": item_id, "state": "done",
-            "t_start": ts, "t_end": ts,  # Argon gives one best moment, not a span
+            "item_id": e["item_id"], "state": "done",
+            "t_start": e["ts"], "t_end": e["ts"],  # Argon gives one best moment, not a span
             "crop_path": crop_rel,
             "description": e["label"],
             "attributes": e["attributes"],
@@ -139,6 +232,8 @@ def items_from_response(text: str, video: Path, run_id: str) -> list[Item]:
             "candidates": [], "status": None, "recovered": False,
             "preview": None, "cart": {"cart_id": None, "continue_url": None},
         })
+    for f in frames.values():
+        f.unlink(missing_ok=True)
     return items
 
 
