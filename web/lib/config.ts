@@ -31,6 +31,8 @@ export function fileUrl(path: string): string {
  * PLACEHOLDER until the backend returns an explicit pass/fail flag with the preview.
  */
 export const PREVIEW_PASS_FIDELITY = 0.8;
+/** Fidelity at or above which a preview "looks close" (between this and PREVIEW_PASS_FIDELITY). */
+export const PREVIEW_CLOSE_FIDELITY = 0.6;
 
 /** Object-position values used to fake circular "crops" of the scan image until real crops exist. */
 export const CROP_POSITIONS = ["18% 62%", "58% 66%", "68% 32%", "28% 78%"] as const;

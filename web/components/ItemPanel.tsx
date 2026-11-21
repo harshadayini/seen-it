@@ -18,6 +18,8 @@ interface Props {
   inCart: boolean;
   onToggleCart: () => void;
   onClose: () => void;
+  /** Opens the "See it in your space" flow (shown only for a matched product with an image). */
+  onSeeIt?: () => void;
 }
 
 /** One labelled bar, 0..1. */
@@ -32,7 +34,7 @@ function Meter({ label, p }: { label: string; p?: number | null }) {
 }
 
 /** @returns the detail panel for one finished item. Side effects: focus handling and an Esc key listener. */
-export function ItemPanel({ item, inCart, onToggleCart, onClose }: Props) {
+export function ItemPanel({ item, inCart, onToggleCart, onClose, onSeeIt }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const closeFn = useRef(onClose);
   closeFn.current = onClose;
@@ -104,6 +106,9 @@ export function ItemPanel({ item, inCart, onToggleCart, onClose }: Props) {
               )}
               <StoreLink candidate={best} className="link" />
             </div>
+            {onSeeIt && !!best?.image_url && (
+              <button type="button" className="btn primary" onClick={onSeeIt}>See it in your space</button>
+            )}
           </>
         )}
 
