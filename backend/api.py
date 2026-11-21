@@ -2,14 +2,31 @@
 import itertools
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from backend.config import ROOT
 from backend.matching import resolve
 from backend.shopify import create_cart
+from backend.shopify.cart import CartError
 from backend.video import desk_items, extract
 from backend.video import preview as make_preview
 
 app = FastAPI(title="Seen It")
+
+# The Next.js app (localhost:3000) calls this API from the browser, so allow it explicitly.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["content-type"],
+)
+# Serve item crops (frames/<run_id>/<item_id>.jpg) and previews so the UI can show them.
+# The folders are gitignored; create them empty so serving never errors before the first run.
+for _name in ("frames", "previews"):
+    (ROOT / _name).mkdir(exist_ok=True)
+    app.mount(f"/{_name}", StaticFiles(directory=ROOT / _name), name=_name)
 
 RUNS: dict[str, dict] = {}
 _counter = itertools.count(1)
@@ -104,7 +121,10 @@ def post_cart(req: CartRequest) -> dict:
         by_merchant.setdefault(best["merchant_domain"], []).append((item, best))
     carts = []
     for domain, pairs in by_merchant.items():
-        cart = create_cart(domain, pairs[0][1]["variant_id"], 1)
+        try:
+            cart = create_cart(domain, pairs[0][1]["variant_id"], 1)
+        except CartError as exc:  # clean structured error, never a fake cart
+            raise HTTPException(502, {"error": exc.code, "message": exc.message, "merchant_domain": domain})
         for item, _ in pairs:
             item["cart"] = dict(cart)
         carts.append({"merchant_domain": domain, "item_ids": [i["item_id"] for i, _ in pairs], **cart})

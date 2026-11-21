@@ -59,7 +59,12 @@ def test_post_preview():
     validate(client.get(f"/run/{run['run_id']}").json())
 
 
-def test_post_cart():
+def test_post_cart(monkeypatch):
+    # The real create_cart calls live merchants; tests use a local fake so they never hit the network.
+    monkeypatch.setattr(
+        "backend.api.create_cart",
+        lambda domain, variant, qty=1: {"cart_id": f"gid://shopify/Cart/t-{domain}", "continue_url": f"https://{domain}/cart/c/t"},
+    )
     run = client.post("/run", json={"video": "demo.mp4"}).json()
     r = client.post("/cart", json={"run_id": run["run_id"], "item_ids": ["i1", "i2"]})
     assert r.status_code == 200
