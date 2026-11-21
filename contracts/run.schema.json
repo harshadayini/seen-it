@@ -136,6 +136,12 @@
           ],
           "minimum": 0,
           "maximum": 1
+        },
+        "product_url": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     },

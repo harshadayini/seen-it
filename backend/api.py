@@ -3,6 +3,7 @@ import copy
 import itertools
 import json
 import logging
+import os
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -15,8 +16,10 @@ from pydantic import BaseModel
 from backend import config
 
 from backend.matching import resolve
+from backend.matching.status import STATUS_RANK
 from backend.shopify import create_cart
 from backend.video import desk_items, extract
+from backend.video.relook import relook
 from backend.video.preview import PreviewError, make_preview
 
 
@@ -48,10 +51,14 @@ app.mount("/frames", StaticFiles(directory=config.FRAMES_DIR), name="frames")
 app.mount("/previews", StaticFiles(directory=config.PREVIEWS_DIR), name="previews")
 
 RUNS: dict[str, dict] = {}
+_STARTED: dict[str, tuple] = {}  # run_id -> (request key, start time), for duplicate-request detection
 _counter = itertools.count(1)
 # Items resolved at once. Kept small: Gemini calls are capped near 5 (AGENT_RULES 3.4) and the
 # Shopify catalog rate-limits (its client retries 429s with backoff).
 RESOLVE_WORKERS = 4
+RELOOK_WORKERS = 3
+RUN_TIME_BUDGET_S = float(os.getenv("RUN_TIME_BUDGET_S", "45"))  # no new second looks after this many seconds
+DEDUPE_WINDOW_S = 180  # a repeated POST /run for the same input returns the run already in progress
 SAVED_RUNS_DIR = config.ROOT / "fixtures" / "saved_runs"
 _SAFE_RUN_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
@@ -113,6 +120,7 @@ def _process(run_id: str, req: RunRequest) -> None:
     "error" message if extraction itself fails. Never raises: a failure is recorded on the run.
     """
     run = RUNS[run_id]
+    t_start = time.monotonic()
     try:
         if req.mode == "desk":
             found = desk_items(req.photo or "", req.request)
@@ -124,29 +132,62 @@ def _process(run_id: str, req: RunRequest) -> None:
         run["items"] = list(items)
         run["totals"] = _totals(items, req.budget)
 
-        def work(n: int, item: dict) -> tuple[int, dict, float]:
-            """Resolve one item in a worker thread; a failure marks only this item "failed"."""
+        def first_pass(n: int, item: dict) -> tuple[int, dict, float]:
+            """Search + check one item WITHOUT the second look, so its card can show right away."""
             t1 = time.monotonic()
             try:
-                out = resolve(item, video_path=req.video)  # keeps its own state: "done" or "failed"
+                out = resolve(item, video_path=req.video, enable_relook=False)  # keeps its own state
             except Exception as e:  # noqa: BLE001  one bad item must not sink the run
                 log.warning("resolve failed for %s: %s", item.get("item_id"), type(e).__name__)
                 out = {**item, "state": "failed"}
             return n, out, time.monotonic() - t1
 
+        def publish(n: int, out: dict) -> None:
+            """Replace one slot and refresh the run. Only the main thread calls this."""
+            items[n] = out
+            run["items"] = list(items)
+            run["totals"] = _totals(items, req.budget)
+
         t_resolve = time.monotonic()
         with ThreadPoolExecutor(max_workers=RESOLVE_WORKERS) as pool:
-            futures = [pool.submit(work, n, item) for n, item in enumerate(found)]
-            for fut in as_completed(futures):
-                # Only this thread touches `items`/`run`; each slot keeps its extraction order.
+            for fut in as_completed([pool.submit(first_pass, n, i) for n, i in enumerate(found)]):
                 n, out, secs = fut.result()
-                items[n] = out
-                log.info("stage=resolve run=%s item=%s seconds=%.1f status=%s state=%s", run_id,
+                publish(n, out)
+                log.info("stage=first_pass run=%s item=%s seconds=%.1f status=%s state=%s", run_id,
                          found[n].get("item_id"), secs, out.get("status"), out.get("state"))
-                run["items"] = list(items)
-                run["totals"] = _totals(items, req.budget)
-        log.info("stage=resolve_all run=%s seconds=%.1f workers=%d", run_id, time.monotonic() - t_resolve,
+        log.info("stage=first_pass_all run=%s seconds=%.1f workers=%d", run_id, time.monotonic() - t_resolve,
                  RESOLVE_WORKERS)
+
+        # Second look (relook) for weak items, inside the time budget. The first-pass result is already
+        # visible; a second look only replaces it when the status improves, so it can never make things worse.
+        if req.mode == "video" and req.video:
+            def second_look(n: int, first: dict) -> tuple[int, dict | None]:
+                """Re-look one weak item; return the improved item, or None to keep the first pass."""
+                if time.monotonic() - t_start > RUN_TIME_BUDGET_S:
+                    log.info("stage=second_look run=%s item=%s skipped: time budget used", run_id, first.get("item_id"))
+                    return n, None
+                try:
+                    looked = relook(first, req.video)
+                    if looked.get("crop_path") == first.get("crop_path") and looked.get("query") == first.get("query"):
+                        return n, None
+                    better = resolve(looked, video_path=req.video, enable_relook=False, force=True)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("second look failed for %s: %s", first.get("item_id"), type(e).__name__)
+                    return n, None
+                if STATUS_RANK[better.get("status")] > STATUS_RANK[first.get("status")]:
+                    return n, {**better, "recovered": True, "state": "done"}
+                return n, None
+
+            weak = [(n, it) for n, it in enumerate(items) if it.get("status") in ("similar", "none")]
+            t_second = time.monotonic()
+            with ThreadPoolExecutor(max_workers=RELOOK_WORKERS) as pool:
+                for fut in as_completed([pool.submit(second_look, n, it) for n, it in weak]):
+                    n, better = fut.result()
+                    if better is not None:
+                        publish(n, better)
+                        log.info("stage=second_look run=%s item=%s recovered %s", run_id, found[n].get("item_id"),
+                                 better.get("status"))
+            log.info("stage=second_look_all run=%s items=%d seconds=%.1f", run_id, len(weak), time.monotonic() - t_second)
         run["state"] = "done"
     except Exception as e:  # noqa: BLE001
         log.error("run %s failed: %s", run_id, type(e).__name__)
@@ -157,7 +198,14 @@ def _process(run_id: str, req: RunRequest) -> None:
 @app.post("/run")
 def post_run(req: RunRequest, background: BackgroundTasks) -> dict:
     """Start a run and return at once with state "processing"; poll GET /run/<id> for the items."""
+    key = (req.mode, req.video or req.photo, req.budget, req.request)
+    for old_id, started in list(_STARTED.items()):
+        old = RUNS.get(old_id)
+        if old and old["state"] == "processing" and started[0] == key and time.monotonic() - started[1] < DEDUPE_WINDOW_S:
+            log.info("duplicate POST /run for %s: returning %s", key[1], old_id)
+            return dict(old)
     run_id = f"r_{next(_counter):03d}"
+    _STARTED[run_id] = (key, time.monotonic())
     run = {
         "run_id": run_id,
         "state": "processing",

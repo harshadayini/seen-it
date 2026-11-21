@@ -55,6 +55,7 @@ class Candidate:
     price: float | None = None
     currency: str | None = None
     image_url: str | None = None
+    product_url: str | None = None  # merchant's product page (Shopify variant url), shown as "View on store"
     p_same_product: float | None = None
     p_same_variant: float | None = None
     # Ephemeral desk-mode scoring fields (kept out of to_dict() wire output)
@@ -78,6 +79,7 @@ class Candidate:
             "price": self.price,
             "currency": self.currency,
             "image_url": self.image_url,
+            "product_url": self.product_url,
             "p_same_product": self.p_same_product,
             "p_same_variant": self.p_same_variant,
         }
@@ -109,6 +111,7 @@ class Candidate:
             price=float(data["price"]) if data.get("price") is not None else None,
             currency=data.get("currency"),
             image_url=data.get("image_url"),
+            product_url=data.get("product_url"),
             p_same_product=(
                 float(data["p_same_product"])
                 if data.get("p_same_product") is not None

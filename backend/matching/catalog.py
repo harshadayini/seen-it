@@ -251,6 +251,7 @@ def normalize_products_to_candidates(
             title = _build_candidate_title(product, variant)
             merchant_domain = _extract_merchant_domain(variant)
             image_url = _extract_image_url(variant, product)
+            product_url = variant.get("url") if isinstance(variant.get("url"), str) and variant["url"].startswith("https://") else None
 
             candidate = Candidate(
                 title=title,
@@ -260,6 +261,7 @@ def normalize_products_to_candidates(
                 price=price,
                 currency=currency,
                 image_url=image_url,
+                product_url=product_url,
                 p_same_product=None,
                 p_same_variant=None,
             )
