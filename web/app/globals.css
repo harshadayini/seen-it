@@ -458,3 +458,29 @@ button { cursor: pointer; touch-action: manipulation; }
   .tag.ok { background: var(--sunken); }
   .stats b.good, .stats b { color: var(--heading); }
 }
+
+/* ---- The landing page always keeps its light look, even when the system is in dark mode ---- */
+:root:has(.scan) {
+  color-scheme: light;
+  --bg: oklch(0.935 0.008 110);
+  --surface: oklch(0.968 0.006 110);
+  --tile: oklch(0.885 0.014 100);
+  --sunken: oklch(0.9 0.01 105);
+  --line: oklch(0.83 0.014 110);
+  --sage: oklch(0.69 0.05 128);
+  --sage-soft: oklch(0.8 0.03 128);
+  --olive: oklch(0.36 0.045 125);
+  --ink: #3b3c34;
+  --heading: #3b3c34;
+  --ink-2: #55564e;
+  --ghost: #8a8e82;
+  --signal: oklch(0.46 0.09 62);
+  --shadow: 0 14px 30px oklch(0.3 0.03 125 / 0.14);
+}
+:root:has(.scan) .nav { background: oklch(0.968 0.006 110 / 0.88); border-color: oklch(1 0 0 / 0.5); }
+:root:has(.scan) .trust { background: oklch(0.968 0.006 110 / 0.92); }
+:root:has(.scan) .trust-ico.sage, :root:has(.scan) .trust-ico.sand { color: var(--heading); }
+:root:has(.scan) .trust-ico.deep { color: #f4f3ee; }
+:root:has(.scan) .wordmark { color: #0b0b0a; }
+
+.shots { max-width: 520px; }
