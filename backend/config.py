@@ -456,3 +456,7 @@ SHOPIFY_CLIENT_ID = os.getenv("SHOPIFY_CLIENT_ID", "")
 SHOPIFY_CLIENT_SECRET = os.getenv("SHOPIFY_CLIENT_SECRET", "")
 SHOPIFY_AGENT_PROFILE_URL = CONFIG.shopify_agent_profile_url
 
+# P1 (video extraction) settings.
+FRAMES_DIR = ROOT / "frames"  # extracted crops (gitignored); never commit frames
+USE_STUBS = os.getenv("SEEN_IT_STUBS", "") == "1"  # tests set this so no network is used
+CROP_PADDING = float(os.getenv("CROP_PADDING", "0.10"))  # grow each bbox side by this fraction of the box size

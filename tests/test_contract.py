@@ -30,21 +30,40 @@ def test_fixture_covers_all_statuses_and_recovery():
     assert any(i["recovered"] for i in items)
 
 
-def test_post_run_and_get_run():
+def finished(body: dict) -> dict:
+    """GET the run after POST /run (TestClient waits for the background work, so it is done)."""
+    got = client.get(f"/run/{body['run_id']}")
+    assert got.status_code == 200
+    return got.json()
+
+
+def test_post_run_returns_processing_then_done():
     r = client.post("/run", json={"video": "demo.mp4", "mode": "video"})
     assert r.status_code == 200
+    assert r.json()["state"] == "processing" and r.json()["items"] == []
     validate(r.json())
-    got = client.get(f"/run/{r.json()['run_id']}")
-    assert got.status_code == 200
-    validate(got.json())
-    assert got.json() == r.json()
+    done = finished(r.json())
+    validate(done)
+    assert done["state"] == "done" and [i["state"] for i in done["items"]] == ["done"] * 3
+
+
+def test_failed_extract_marks_run_failed(monkeypatch):
+    import backend.api as api
+
+    def boom(*a, **k):
+        raise RuntimeError("argon down")
+
+    monkeypatch.setattr(api, "extract", boom)
+    run = finished(client.post("/run", json={"video": "x.mp4"}).json())
+    validate(run)
+    assert run["state"] == "failed" and "argon down" in run["error"]
 
 
 def test_post_run_desk_mode_with_budget():
-    r = client.post("/run", json={"photo": "desk.jpg", "mode": "desk", "budget": 150, "request": "warmer"})
-    validate(r.json())
-    assert r.json()["mode"] == "desk"
-    assert r.json()["totals"]["within_budget"] is False  # stub items total 418 > 150
+    r = finished(client.post("/run", json={"photo": "desk.jpg", "mode": "desk", "budget": 150, "request": "warmer"}).json())
+    validate(r)
+    assert r["mode"] == "desk"
+    assert r["totals"]["within_budget"] is False  # stub items total 418 > 150
 
 
 def test_get_run_unknown():
@@ -52,7 +71,7 @@ def test_get_run_unknown():
 
 
 def test_post_preview():
-    run = client.post("/run", json={"video": "demo.mp4"}).json()
+    run = finished(client.post("/run", json={"video": "demo.mp4"}).json())
     r = client.post("/preview", json={"run_id": run["run_id"], "item_id": "i1"})
     assert r.status_code == 200
     validate(r.json()["preview"], "preview")
@@ -60,7 +79,7 @@ def test_post_preview():
 
 
 def test_post_cart():
-    run = client.post("/run", json={"video": "demo.mp4"}).json()
+    run = finished(client.post("/run", json={"video": "demo.mp4"}).json())
     r = client.post("/cart", json={"run_id": run["run_id"], "item_ids": ["i1", "i2"]})
     assert r.status_code == 200
     body = r.json()
@@ -74,5 +93,5 @@ def test_post_cart():
 
 
 def test_cart_rejects_unmatched_item():
-    run = client.post("/run", json={"video": "demo.mp4"}).json()
+    run = finished(client.post("/run", json={"video": "demo.mp4"}).json())
     assert client.post("/cart", json={"run_id": run["run_id"], "item_ids": ["i3"]}).status_code == 422

@@ -1,15 +1,26 @@
 """Thin glue: endpoints call each person's functions. Keep it small."""
 import itertools
+import logging
 
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+from backend import config
 
 from backend.matching import resolve
 from backend.shopify import create_cart
 from backend.video import desk_items, extract
 from backend.video import preview as make_preview
 
+log = logging.getLogger("seen_it.api")
 app = FastAPI(title="Seen It")
+# The web app (Next.js dev server) runs on another port and loads crops from /frames.
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+                   allow_methods=["*"], allow_headers=["*"])
+config.FRAMES_DIR.mkdir(exist_ok=True)
+app.mount("/frames", StaticFiles(directory=config.FRAMES_DIR), name="frames")
 
 RUNS: dict[str, dict] = {}
 _counter = itertools.count(1)
@@ -58,24 +69,51 @@ def _totals(items: list[dict], budget: float | None) -> dict:
     return {"price": total, "within_budget": True if budget is None else total <= budget}
 
 
+def _process(run_id: str, req: RunRequest) -> None:
+    """Fill the run in the background so GET /run/<id> shows items as they finish.
+
+    Extracts items (state "processing"), publishes them, then resolves each one (search +
+    check + status) and marks it "done" or "failed". Sets the run "done", or "failed" with an
+    "error" message if extraction itself fails. Never raises: a failure is recorded on the run.
+    """
+    run = RUNS[run_id]
+    try:
+        if req.mode == "desk":
+            found = desk_items(req.photo or "", req.request)
+        else:
+            found = extract(req.video or "", run_id)
+        items = [{**i, "state": "processing"} for i in found]
+        run["items"] = list(items)
+        for n, item in enumerate(found):
+            try:
+                items[n] = {**resolve(item), "state": "done"}
+            except Exception as e:  # noqa: BLE001  one bad item must not sink the run
+                log.warning("resolve failed for %s: %s", item.get("item_id"), type(e).__name__)
+                items[n] = {**item, "state": "failed"}
+            run["items"] = list(items)
+            run["totals"] = _totals(items, req.budget)
+        run["state"] = "done"
+    except Exception as e:  # noqa: BLE001
+        log.error("run %s failed: %s", run_id, type(e).__name__)
+        run["state"] = "failed"
+        run["error"] = f"{type(e).__name__}: {str(e)[:300]}"
+
+
 @app.post("/run")
-def post_run(req: RunRequest) -> dict:
-    if req.mode == "desk":
-        items = desk_items(req.photo or "", req.request)
-    else:
-        items = extract(req.video or "")
-    items = [resolve(i) for i in items]
+def post_run(req: RunRequest, background: BackgroundTasks) -> dict:
+    """Start a run and return at once with state "processing"; poll GET /run/<id> for the items."""
     run_id = f"r_{next(_counter):03d}"
     run = {
         "run_id": run_id,
-        "state": "done",
+        "state": "processing",
         "mode": req.mode,
         "source": {"video_id": req.video, "duration_s": None, "budget_usd": req.budget},
-        "items": items,
-        "totals": _totals(items, req.budget),
+        "items": [],
+        "totals": {"price": 0, "within_budget": True},
     }
     RUNS[run_id] = run
-    return run
+    background.add_task(_process, run_id, req)
+    return dict(run)
 
 
 @app.get("/run/{run_id}")
