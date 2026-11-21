@@ -75,22 +75,38 @@ def _tiny_jpeg_data_url():
     return "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8" + b"x" * 400).decode()
 
 
-def test_post_preview_uses_camera_scene_and_returns_measured_fidelity(monkeypatch):
+def _poll_preview(run_id, item_id):
+    """TestClient finishes background tasks before returning, so one GET shows the final state."""
+    r = client.get(f"/preview/{run_id}/{item_id}")
+    assert r.status_code == 200
+    return r.json()
+
+
+def test_post_preview_runs_in_background_and_reports_measured_fidelity(monkeypatch):
     import backend.api as api
 
     seen = {}
 
     def fake_make(scene, url, run_id, item_id, **kw):
-        seen.update(scene=scene, url=url)
+        seen.update(scene=scene, url=url, **kw)
         return {"image_path": f"previews/{run_id}/{item_id}.jpg", "fidelity": 0.91, "regenerated": False}
 
     monkeypatch.setattr(api, "make_preview", fake_make)
     run = finished(client.post("/run", json={"video": "demo.mp4"}).json())
-    r = client.post("/preview", json={"run_id": run["run_id"], "item_id": "i1", "scene_image": _tiny_jpeg_data_url()})
-    assert r.status_code == 200, r.text
-    validate(r.json()["preview"], "preview")
-    assert r.json()["preview"]["fidelity"] == 0.91 and seen["scene"].endswith("_scene.jpg")
-    validate(client.get(f"/run/{run['run_id']}").json())
+    r = client.post("/preview", json={"run_id": run["run_id"], "item_id": "i1", "scene_image": _tiny_jpeg_data_url(),
+                                       "anchor_x": 0.25, "anchor_y": 0.75})
+    assert r.status_code == 200 and r.json()["status"] == "processing"
+    job = _poll_preview(run["run_id"], "i1")
+    assert job["status"] == "done" and job["preview"]["fidelity"] == 0.91
+    validate(job["preview"], "preview")
+    assert seen["scene"].endswith("_scene.jpg") and seen["anchor"] == (0.25, 0.75)
+    validate(client.get(f"/run/{run['run_id']}").json())  # the item now carries the preview
+
+
+def test_preview_status_is_none_before_any_request():
+    run = finished(client.post("/run", json={"video": "demo.mp4"}).json())
+    assert _poll_preview(run["run_id"], "i1")["status"] == "none"
+    assert client.get(f"/preview/{run['run_id']}/zzz").status_code == 404
 
 
 def test_post_preview_rejects_missing_scene_unmatched_item_and_bad_image():
@@ -102,7 +118,7 @@ def test_post_preview_rejects_missing_scene_unmatched_item_and_bad_image():
     assert client.post("/preview", json={"run_id": "nope", "item_id": "i1"}).status_code == 404
 
 
-def test_post_preview_upstream_failure_is_502_not_a_fake_image(monkeypatch):
+def test_preview_upstream_failure_is_a_failed_job_not_a_fake_image(monkeypatch):
     import backend.api as api
     from backend.video.preview import PreviewError
 
@@ -112,9 +128,18 @@ def test_post_preview_upstream_failure_is_502_not_a_fake_image(monkeypatch):
     monkeypatch.setattr(api, "make_preview", boom)
     run = finished(client.post("/run", json={"video": "demo.mp4"}).json())
     before = run["items"][0].get("preview")
-    r = client.post("/preview", json={"run_id": run["run_id"], "item_id": "i1", "scene_image": _tiny_jpeg_data_url()})
-    assert r.status_code == 502 and "image model" in r.json()["detail"]
-    assert finished(run)["items"][0].get("preview") == before  # a failed call never writes a preview
+    client.post("/preview", json={"run_id": run["run_id"], "item_id": "i1", "scene_image": _tiny_jpeg_data_url()})
+    job = _poll_preview(run["run_id"], "i1")
+    assert job["status"] == "failed" and "image model" in job["error"] and "preview" not in job
+    assert finished(run)["items"][0].get("preview") == before  # a failed job never writes a preview
+
+
+def test_preview_rejects_bad_anchor_and_unknown_scene():
+    run = finished(client.post("/run", json={"video": "demo.mp4"}).json())
+    rid = run["run_id"]
+    assert client.post("/preview", json={"run_id": rid, "item_id": "i1", "scene_image": _tiny_jpeg_data_url(), "anchor_x": 1.5, "anchor_y": 0.5}).status_code == 422
+    assert client.post("/preview", json={"run_id": rid, "item_id": "i1", "scene_id": "abcdefabcdef"}).status_code == 422
+    assert client.post("/preview", json={"run_id": rid, "item_id": "i1", "scene_id": "../../etc"}).status_code == 422
 
 
 def test_post_cart(monkeypatch):

@@ -65,8 +65,20 @@ def _fetch_image(url: str) -> bytes:
     return data
 
 
-def _generate(scene: bytes, product: bytes) -> bytes:
-    """One call to the Gemini image model. Returns the composite's image bytes; raises PreviewError."""
+def _where(anchor: tuple[float, float] | None) -> str:
+    """Extra prompt text telling the model where the user wants the product, or '' when they did not say."""
+    if anchor is None:
+        return ""
+    x, y = (max(0.0, min(1.0, float(v))) for v in anchor)
+    return (f" Put the product where the user pointed: about {x * 100:.0f}% from the left and {y * 100:.0f}% from the "
+            "top of IMAGE 1, resting naturally on or against a real surface there.")
+
+
+def _generate(scene: bytes, product: bytes, anchor: tuple[float, float] | None = None) -> bytes:
+    """One call to the Gemini image model. Returns the composite's image bytes; raises PreviewError.
+
+    anchor: optional (x, y) in 0-1 (from the left, from the top) where the user tapped to say where it should go.
+    """
     from google import genai
     from google.genai import types
 
@@ -78,7 +90,7 @@ def _generate(scene: bytes, product: bytes) -> bytes:
         resp = client.models.generate_content(
             model=config.GEMINI_IMAGE_MODEL,
             contents=[types.Part.from_bytes(data=scene, mime_type="image/jpeg"),
-                      types.Part.from_bytes(data=product, mime_type="image/jpeg"), PROMPT],
+                      types.Part.from_bytes(data=product, mime_type="image/jpeg"), PROMPT + _where(anchor)],
             config=types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"]),
         )
     except Exception as e:  # noqa: BLE001
@@ -139,15 +151,17 @@ def check_fidelity(scene: bytes, product: bytes, result: bytes, invoke: Callable
 
 def make_preview(scene_path: str, product_image_url: str, run_id: str, item_id: str,
                  generate: Callable | None = None, fetch: Callable | None = None,
-                 check: Callable | None = None, retry_if_low: bool = False) -> dict:
+                 check: Callable | None = None, retry_if_low: bool = False,
+                 anchor: tuple[float, float] | None = None) -> dict:
     """Make and check a preview of a product in a scene.
 
     Args: scene_path: the user's scene image (path relative to the repo root, or absolute); product_image_url: the
     matched Shopify listing photo; run_id/item_id: name previews/<run_id>/<item_id>.jpg; generate, fetch, check:
-    injectable for tests; retry_if_low: regenerate once when the fidelity is below the bar. Returns {"image_path", "fidelity" (0-1 or None when unchecked), "regenerated"}.
+    injectable for tests; retry_if_low: regenerate once when the fidelity is below the bar; anchor: optional (x, y) tap position in 0-1. Returns {"image_path", "fidelity" (0-1 or None when unchecked), "regenerated"}.
     Side effects: up to two image-model calls and two Decisions calls; writes one jpg. Raises PreviewError.
     """
-    generate, fetch, check = generate or _generate, fetch or _fetch_image, check or check_fidelity
+    generate = generate or (lambda sc, pr: _generate(sc, pr, anchor))
+    fetch, check = fetch or _fetch_image, check or check_fidelity
     scene_file = Path(scene_path) if Path(scene_path).is_absolute() else config.ROOT / scene_path
     if not scene_file.is_file():
         raise PreviewError("the scene image is missing")

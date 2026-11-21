@@ -8,12 +8,12 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from backend import config
+from backend import config, scenes
 
 from backend.matching import resolve
 from backend.matching.status import STATUS_RANK
@@ -52,6 +52,7 @@ app.mount("/frames", StaticFiles(directory=config.FRAMES_DIR), name="frames")
 app.mount("/previews", StaticFiles(directory=config.PREVIEWS_DIR), name="previews")
 
 RUNS: dict[str, dict] = {}
+PREVIEW_JOBS: dict[tuple[str, str], dict] = {}  # (run_id, item_id) -> {status, preview?, error?}
 _STARTED: dict[str, tuple] = {}  # run_id -> (request key, start time), for duplicate-request detection
 _counter = itertools.count(1)
 # Items resolved at once. Kept small: Gemini calls are capped near 5 (AGENT_RULES 3.4) and the
@@ -79,7 +80,11 @@ class ReplayRequest(BaseModel):
 class PreviewRequest(BaseModel):
     run_id: str
     item_id: str
-    scene_image: str | None = None  # optional data URL (camera capture or upload); default is the item's video frame
+    scene_id: str | None = None     # from POST /scene (an uploaded photo or video)
+    frame_index: int = 0            # which frame of that scene to use (a video gives several)
+    scene_image: str | None = None  # alternative: a data URL (camera capture); default is the item's own video frame
+    anchor_x: float | None = None   # optional tap position, 0-1 from the left ...
+    anchor_y: float | None = None   # ... and 0-1 from the top: where the user wants the product
     retry_if_low: bool = False      # regenerate once if the fidelity is below the bar (doubles the time); eval uses it
 
 
@@ -267,25 +272,75 @@ def _save_scene(data_url: str, run_id: str, item_id: str) -> str:
     return rel
 
 
-@app.post("/preview")
-def post_preview(req: PreviewRequest) -> dict:
-    """Place the item's matched product into a scene (the camera capture if sent, else its video frame) and check it.
+@app.post("/scene")
+async def post_scene(request: Request) -> dict:
+    """Upload the user's own scene as the raw request body (Content-Type image/* or video/*, up to 60 MB).
 
-    Takes about 17 s (image model, then the Decisions check); about double with retry_if_low. Returns the preview with its measured fidelity, or null
-    fidelity when the check could not run. A failure returns 502 with a clear message and never a fake image.
+    Returns {scene_id, kind, frames (relative paths, served under /previews), default}. A video gives several frames
+    to choose from. Use scene_id and frame_index in POST /preview.
+    """
+    data = await request.body()
+    try:
+        return scenes.save_scene(data)
+    except scenes.SceneError as e:
+        raise HTTPException(422, str(e)) from e
+
+
+def _run_preview(req: PreviewRequest, scene: str, image_url: str) -> None:
+    """Make the preview in the background and record the outcome in PREVIEW_JOBS. Never raises."""
+    key = (req.run_id, req.item_id)
+    anchor = (req.anchor_x, req.anchor_y) if req.anchor_x is not None and req.anchor_y is not None else None
+    try:
+        result = make_preview(scene, image_url, req.run_id, req.item_id, retry_if_low=req.retry_if_low, anchor=anchor)
+        item = _get_item(_get_run(req.run_id), req.item_id)
+        item["preview"] = result
+        PREVIEW_JOBS[key] = {"status": "done", "preview": result}
+    except PreviewError as e:
+        PREVIEW_JOBS[key] = {"status": "failed", "error": str(e)}
+    except Exception as e:  # noqa: BLE001
+        log.error("preview %s failed: %s", key, type(e).__name__)
+        PREVIEW_JOBS[key] = {"status": "failed", "error": f"unexpected error ({type(e).__name__})"}
+
+
+@app.post("/preview")
+def post_preview(req: PreviewRequest, background: BackgroundTasks) -> dict:
+    """Start placing the item's matched product into a scene; poll GET /preview/<run_id>/<item_id> for the result.
+
+    The scene is, in order: an uploaded scene (scene_id + frame_index), a camera capture (scene_image data URL), or the
+    item's own video frame. Takes about 17 s (about double with retry_if_low), so it returns at once with
+    status "processing". Optional anchor_x / anchor_y say where the user tapped.
     """
     item = _get_item(_get_run(req.run_id), req.item_id)
     best = _best(item)
     if best is None or not best.get("image_url"):
         raise HTTPException(422, f"item {req.item_id} has no matched product image to place")
-    scene = _save_scene(req.scene_image, req.run_id, req.item_id) if req.scene_image else item.get("frame_path")
-    if not scene:
-        raise HTTPException(422, f"item {req.item_id} has no scene image; send scene_image")
     try:
-        item["preview"] = make_preview(scene, best["image_url"], req.run_id, req.item_id, retry_if_low=req.retry_if_low)
-    except PreviewError as e:
-        raise HTTPException(502, str(e)) from e
-    return {"run_id": req.run_id, "item_id": req.item_id, "preview": item["preview"]}
+        if req.scene_id:
+            scene = scenes.scene_frame(req.scene_id, req.frame_index)
+        elif req.scene_image:
+            scene = _save_scene(req.scene_image, req.run_id, req.item_id)
+        else:
+            scene = item.get("frame_path")
+    except scenes.SceneError as e:
+        raise HTTPException(422, str(e)) from e
+    if not scene:
+        raise HTTPException(422, f"item {req.item_id} has no scene image; send scene_id or scene_image")
+    for v in (req.anchor_x, req.anchor_y):
+        if v is not None and not 0.0 <= v <= 1.0:
+            raise HTTPException(422, "anchor_x and anchor_y must be between 0 and 1")
+    key = (req.run_id, req.item_id)
+    if PREVIEW_JOBS.get(key, {}).get("status") == "processing":
+        return {"run_id": req.run_id, "item_id": req.item_id, "status": "processing"}  # already working on it
+    PREVIEW_JOBS[key] = {"status": "processing"}
+    background.add_task(_run_preview, req, scene, best["image_url"])
+    return {"run_id": req.run_id, "item_id": req.item_id, "status": "processing"}
+
+
+@app.get("/preview/{run_id}/{item_id}")
+def get_preview(run_id: str, item_id: str) -> dict:
+    """Status of a preview: {status: "none"|"processing"|"done"|"failed", preview?, error?}."""
+    _get_item(_get_run(run_id), item_id)
+    return {"run_id": run_id, "item_id": item_id, **PREVIEW_JOBS.get((run_id, item_id), {"status": "none"})}
 
 
 @app.post("/cart")
