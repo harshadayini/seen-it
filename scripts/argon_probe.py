@@ -21,18 +21,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from backend import config  # noqa: E402  (model IDs and key come only from config/.env)
+from backend.video.extract import PROMPT  # noqa: E402  (single shared prompt)
 
 from google import genai  # noqa: E402
 from google.genai import errors, types  # noqa: E402
 
-PROMPT = """You are watching a video. List every PURCHASABLE product visible in it
-(furniture, decor, lighting, clothing, accessories). Do NOT list walls, floors, people,
-or generic background. At most 10 items. Return ONLY a JSON array; each entry:
-{"label": str,
- "attributes": {"color": str, "material": str, "category": str, "style": str},
- "timestamp_s": number,   // the single best moment in the video to see this product
- "bbox": [ymin, xmin, ymax, xmax]}  // normalized 0-1 box around the product in the frame at timestamp_s
-"""
 ATTR_KEYS = {"color", "material", "category", "style"}
 
 

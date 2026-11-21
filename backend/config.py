@@ -32,3 +32,7 @@ SHOPIFY_AGENT_PROFILE_URL = os.getenv(
 
 FIXTURE_PATH = ROOT / "fixtures" / "sample_run.json"
 SCHEMA_PATH = ROOT / "contracts" / "run.schema.json"
+
+FRAMES_DIR = ROOT / "frames"  # extracted crops (gitignored); never commit frames
+USE_STUBS = os.getenv("SEEN_IT_STUBS", "") == "1"  # tests set this so no network is used
+CROP_PADDING = float(os.getenv("CROP_PADDING", "0.10"))  # grow each bbox side by this fraction of the box size
