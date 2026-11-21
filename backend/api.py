@@ -1,7 +1,11 @@
 """Thin glue: endpoints call each person's functions. Keep it small."""
+import copy
 import itertools
+import json
 import logging
+import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -43,6 +47,11 @@ app.mount("/frames", StaticFiles(directory=config.FRAMES_DIR), name="frames")
 
 RUNS: dict[str, dict] = {}
 _counter = itertools.count(1)
+# Items resolved at once. Kept small: Gemini calls are capped near 5 (AGENT_RULES 3.4) and the
+# Shopify catalog rate-limits (its client retries 429s with backoff).
+RESOLVE_WORKERS = 4
+SAVED_RUNS_DIR = config.ROOT / "fixtures" / "saved_runs"
+_SAFE_RUN_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 class RunRequest(BaseModel):
@@ -51,6 +60,10 @@ class RunRequest(BaseModel):
     mode: str = "video"
     budget: float | None = None
     request: str = ""
+
+
+class ReplayRequest(BaseModel):
+    run_id: str
 
 
 class PreviewRequest(BaseModel):
@@ -105,17 +118,31 @@ def _process(run_id: str, req: RunRequest) -> None:
             log.info("stage=extract run=%s seconds=%.1f items=%d", run_id, time.monotonic() - t0, len(found))
         items = [{**i, "state": "processing"} for i in found]
         run["items"] = list(items)
-        for n, item in enumerate(found):
+        run["totals"] = _totals(items, req.budget)
+
+        def work(n: int, item: dict) -> tuple[int, dict, float]:
+            """Resolve one item in a worker thread; a failure marks only this item "failed"."""
             t1 = time.monotonic()
             try:
-                items[n] = resolve(item, video_path=req.video)  # keeps its own state: "done" or "failed"
+                out = resolve(item, video_path=req.video)  # keeps its own state: "done" or "failed"
             except Exception as e:  # noqa: BLE001  one bad item must not sink the run
                 log.warning("resolve failed for %s: %s", item.get("item_id"), type(e).__name__)
-                items[n] = {**item, "state": "failed"}
-            log.info("stage=resolve run=%s item=%s seconds=%.1f status=%s state=%s", run_id,
-                     item.get("item_id"), time.monotonic() - t1, items[n].get("status"), items[n].get("state"))
-            run["items"] = list(items)
-            run["totals"] = _totals(items, req.budget)
+                out = {**item, "state": "failed"}
+            return n, out, time.monotonic() - t1
+
+        t_resolve = time.monotonic()
+        with ThreadPoolExecutor(max_workers=RESOLVE_WORKERS) as pool:
+            futures = [pool.submit(work, n, item) for n, item in enumerate(found)]
+            for fut in as_completed(futures):
+                # Only this thread touches `items`/`run`; each slot keeps its extraction order.
+                n, out, secs = fut.result()
+                items[n] = out
+                log.info("stage=resolve run=%s item=%s seconds=%.1f status=%s state=%s", run_id,
+                         found[n].get("item_id"), secs, out.get("status"), out.get("state"))
+                run["items"] = list(items)
+                run["totals"] = _totals(items, req.budget)
+        log.info("stage=resolve_all run=%s seconds=%.1f workers=%d", run_id, time.monotonic() - t_resolve,
+                 RESOLVE_WORKERS)
         run["state"] = "done"
     except Exception as e:  # noqa: BLE001
         log.error("run %s failed: %s", run_id, type(e).__name__)
@@ -138,6 +165,28 @@ def post_run(req: RunRequest, background: BackgroundTasks) -> dict:
     RUNS[run_id] = run
     background.add_task(_process, run_id, req)
     return dict(run)
+
+
+@app.post("/run/replay")
+def post_run_replay(req: ReplayRequest) -> dict:
+    """Load a saved finished run from fixtures/saved_runs/<run_id>.json as a new finished run.
+
+    A fallback for when a live run fails. The copy gets a fresh run_id so it never overwrites a live
+    run; it is already "done", so GET /run/<id> and /preview and /cart work on it as usual.
+    """
+    if not _SAFE_RUN_ID.match(req.run_id):
+        raise HTTPException(422, "invalid run_id")
+    path = SAVED_RUNS_DIR / f"{req.run_id}.json"
+    if not path.is_file():
+        raise HTTPException(404, f"no saved run {req.run_id}")
+    saved = json.loads(path.read_text())
+    if saved.get("state") not in ("done", "failed"):
+        raise HTTPException(422, f"saved run {req.run_id} is not finished")
+    run = copy.deepcopy(saved)
+    run["run_id"] = f"r_{next(_counter):03d}"
+    RUNS[run["run_id"]] = run
+    log.info("replay saved=%s as=%s items=%d", req.run_id, run["run_id"], len(run.get("items", [])))
+    return run
 
 
 @app.get("/run/{run_id}")

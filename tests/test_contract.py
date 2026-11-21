@@ -95,3 +95,120 @@ def test_post_cart():
 def test_cart_rejects_unmatched_item():
     run = finished(client.post("/run", json={"video": "demo.mp4"}).json())
     assert client.post("/cart", json={"run_id": run["run_id"], "item_ids": ["i3"]}).status_code == 422
+
+
+# --- parallel resolve ---
+
+def test_resolve_runs_in_parallel_keeps_order_and_isolates_failures(monkeypatch):
+    import threading
+    import time
+
+    import backend.api as api
+
+    lock = threading.Lock()
+    state = {"now": 0, "peak": 0, "snapshot_when_i1_started": None}
+    delays = {"i1": 0.4, "i2": 0.05, "i3": 0.15}  # finish order is i2, i3, i1: the reverse of item order
+
+    def fake_resolve(item, **kwargs):
+        with lock:
+            state["now"] += 1
+            state["peak"] = max(state["peak"], state["now"])
+        try:
+            time.sleep(delays[item["item_id"]])
+            if item["item_id"] == "i2":
+                raise RuntimeError("shopify down")
+            if item["item_id"] == "i1":
+                # By now i2 has failed and i3 is done: the run already shows them while i1 is still processing.
+                run = api.RUNS[list(api.RUNS)[-1]]
+                state["snapshot_when_i1_started"] = {i["item_id"]: i["state"] for i in run["items"]}
+            return {**item, "state": "done", "status": "none"}
+        finally:
+            with lock:
+                state["now"] -= 1
+
+    monkeypatch.setattr(api, "resolve", fake_resolve)
+    run = finished(client.post("/run", json={"video": "demo.mp4"}).json())
+    validate(run)
+    assert run["state"] == "done"  # a failing item never fails the run
+    assert [i["item_id"] for i in run["items"]] == ["i1", "i2", "i3"]
+    assert [i["state"] for i in run["items"]] == ["done", "failed", "done"]
+    assert state["peak"] == 3  # all three ran at once (limit is 4)
+    assert state["snapshot_when_i1_started"] == {"i1": "processing", "i2": "failed", "i3": "done"}
+
+
+def test_resolve_workers_are_capped(monkeypatch):
+    import threading
+    import time
+
+    import backend.api as api
+
+    lock = threading.Lock()
+    state = {"now": 0, "peak": 0}
+
+    def fake_resolve(item, **kwargs):
+        with lock:
+            state["now"] += 1
+            state["peak"] = max(state["peak"], state["now"])
+        time.sleep(0.05)
+        with lock:
+            state["now"] -= 1
+        return {**item, "state": "done", "status": "none"}
+
+    monkeypatch.setattr(api, "resolve", fake_resolve)
+    monkeypatch.setattr(api, "RESOLVE_WORKERS", 2)
+    run = finished(client.post("/run", json={"video": "demo.mp4"}).json())
+    assert run["state"] == "done" and state["peak"] == 2
+
+
+# --- replay of saved runs ---
+
+@pytest.fixture
+def saved_dir(tmp_path, monkeypatch):
+    import backend.api as api
+
+    monkeypatch.setattr(api, "SAVED_RUNS_DIR", tmp_path)
+    return tmp_path
+
+
+def test_replay_copies_saved_run_as_finished_run(saved_dir):
+    saved = json.loads(FIXTURE_PATH.read_text())
+    saved["run_id"] = "r_saved"
+    (saved_dir / "r_saved.json").write_text(json.dumps(saved))
+    r = client.post("/run/replay", json={"run_id": "r_saved"})
+    assert r.status_code == 200
+    body = r.json()
+    validate(body)
+    assert body["state"] == "done" and body["run_id"] != "r_saved"  # fresh id, never overwrites a live run
+    assert client.get(f"/run/{body['run_id']}").json() == body
+    assert body["items"] == saved["items"]
+
+
+def test_replay_unknown_and_unsafe_ids(saved_dir):
+    assert client.post("/run/replay", json={"run_id": "missing"}).status_code == 404
+    assert client.post("/run/replay", json={"run_id": "../sample_run"}).status_code == 422
+
+
+def test_replay_rejects_unfinished_run(saved_dir):
+    saved = json.loads(FIXTURE_PATH.read_text())
+    saved["state"] = "processing"
+    (saved_dir / "r_busy.json").write_text(json.dumps(saved))
+    assert client.post("/run/replay", json={"run_id": "r_busy"}).status_code == 422
+
+
+def test_save_run_strips_catalog_text_and_images(monkeypatch):
+    import importlib.util
+
+    from backend.config import ROOT
+
+    spec = importlib.util.spec_from_file_location("save_run", ROOT / "scripts" / "save_run.py")
+    save_run = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(save_run)
+    run = json.loads(FIXTURE_PATH.read_text())
+    cand = run["items"][0]["candidates"][0]
+    cleaned = save_run.strip_run(run)
+    validate(cleaned)  # still a valid run, so it can be replayed
+    c = cleaned["items"][0]["candidates"][0]
+    assert c["upid"] == cand["upid"] and c["variant_id"] == cand["variant_id"]
+    assert c["p_same_product"] == cand["p_same_product"] and c["merchant_domain"] == cand["merchant_domain"]
+    assert c["title"] == "" and c["price"] is None and c["image_url"] is None
+    assert all(i["preview"] is None for i in cleaned["items"])
