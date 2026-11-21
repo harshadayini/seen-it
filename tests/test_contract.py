@@ -70,12 +70,51 @@ def test_get_run_unknown():
     assert client.get("/run/nope").status_code == 404
 
 
-def test_post_preview():
+def _tiny_jpeg_data_url():
+    import base64
+    return "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8" + b"x" * 400).decode()
+
+
+def test_post_preview_uses_camera_scene_and_returns_measured_fidelity(monkeypatch):
+    import backend.api as api
+
+    seen = {}
+
+    def fake_make(scene, url, run_id, item_id, **kw):
+        seen.update(scene=scene, url=url)
+        return {"image_path": f"previews/{run_id}/{item_id}.jpg", "fidelity": 0.91, "regenerated": False}
+
+    monkeypatch.setattr(api, "make_preview", fake_make)
     run = finished(client.post("/run", json={"video": "demo.mp4"}).json())
-    r = client.post("/preview", json={"run_id": run["run_id"], "item_id": "i1"})
-    assert r.status_code == 200
+    r = client.post("/preview", json={"run_id": run["run_id"], "item_id": "i1", "scene_image": _tiny_jpeg_data_url()})
+    assert r.status_code == 200, r.text
     validate(r.json()["preview"], "preview")
+    assert r.json()["preview"]["fidelity"] == 0.91 and seen["scene"].endswith("_scene.jpg")
     validate(client.get(f"/run/{run['run_id']}").json())
+
+
+def test_post_preview_rejects_missing_scene_unmatched_item_and_bad_image():
+    run = finished(client.post("/run", json={"video": "demo.mp4"}).json())
+    rid = run["run_id"]
+    assert client.post("/preview", json={"run_id": rid, "item_id": "i1"}).status_code == 422   # no scene to use
+    assert client.post("/preview", json={"run_id": rid, "item_id": "i3", "scene_image": _tiny_jpeg_data_url()}).status_code == 422  # no match
+    assert client.post("/preview", json={"run_id": rid, "item_id": "i1", "scene_image": "not a data url"}).status_code == 422
+    assert client.post("/preview", json={"run_id": "nope", "item_id": "i1"}).status_code == 404
+
+
+def test_post_preview_upstream_failure_is_502_not_a_fake_image(monkeypatch):
+    import backend.api as api
+    from backend.video.preview import PreviewError
+
+    def boom(*a, **k):
+        raise PreviewError("image model call failed")
+
+    monkeypatch.setattr(api, "make_preview", boom)
+    run = finished(client.post("/run", json={"video": "demo.mp4"}).json())
+    before = run["items"][0].get("preview")
+    r = client.post("/preview", json={"run_id": run["run_id"], "item_id": "i1", "scene_image": _tiny_jpeg_data_url()})
+    assert r.status_code == 502 and "image model" in r.json()["detail"]
+    assert finished(run)["items"][0].get("preview") == before  # a failed call never writes a preview
 
 
 def test_post_cart():

@@ -218,6 +218,12 @@
         },
         "cart": {
           "$ref": "#/$defs/cart"
+        },
+        "frame_path": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     },

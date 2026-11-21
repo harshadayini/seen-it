@@ -459,4 +459,6 @@ SHOPIFY_AGENT_PROFILE_URL = CONFIG.shopify_agent_profile_url
 # P1 (video extraction) settings.
 FRAMES_DIR = ROOT / "frames"  # extracted crops (gitignored); never commit frames
 USE_STUBS = os.getenv("SEEN_IT_STUBS", "") == "1"  # tests set this so no network is used
+PREVIEW_MIN_FIDELITY = float(os.getenv("PREVIEW_MIN_FIDELITY", "0.8"))  # below this a preview is regenerated once
+PREVIEWS_DIR = ROOT / "previews"  # generated composites (gitignored)
 CROP_PADDING = float(os.getenv("CROP_PADDING", "0.10"))  # grow each bbox side by this fraction of the box size

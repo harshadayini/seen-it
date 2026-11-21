@@ -285,8 +285,10 @@ def items_from_response(text: str, video: Path, run_id: str, locate=None, refine
         else:
             log.warning("no usable box for %s (%s); keeping the full frame", e["item_id"], e["label"])
             shutil.copyfile(frames[key], config.ROOT / crop_rel)
+        frame_rel = f"frames/{run_id}/{e['item_id']}_frame.jpg"  # full frame: the default scene for "See it here"
+        shutil.copyfile(frames[key], config.ROOT / frame_rel)
         items.append({
-            "item_id": e["item_id"], "state": "done",
+            "item_id": e["item_id"], "state": "done", "frame_path": frame_rel,
             "t_start": e["ts"], "t_end": e["ts"],  # Argon gives one best moment, not a span
             "crop_path": crop_rel,
             "description": e["label"],

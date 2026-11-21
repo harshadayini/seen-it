@@ -17,7 +17,7 @@ from backend import config
 from backend.matching import resolve
 from backend.shopify import create_cart
 from backend.video import desk_items, extract
-from backend.video import preview as make_preview
+from backend.video.preview import PreviewError, make_preview
 
 
 
@@ -43,7 +43,9 @@ app = FastAPI(title="Seen It")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
                    allow_methods=["*"], allow_headers=["*"])
 config.FRAMES_DIR.mkdir(exist_ok=True)
+config.PREVIEWS_DIR.mkdir(exist_ok=True)
 app.mount("/frames", StaticFiles(directory=config.FRAMES_DIR), name="frames")
+app.mount("/previews", StaticFiles(directory=config.PREVIEWS_DIR), name="previews")
 
 RUNS: dict[str, dict] = {}
 _counter = itertools.count(1)
@@ -69,6 +71,7 @@ class ReplayRequest(BaseModel):
 class PreviewRequest(BaseModel):
     run_id: str
     item_id: str
+    scene_image: str | None = None  # optional data URL (camera capture or upload); default is the item's video frame
 
 
 class CartRequest(BaseModel):
@@ -194,12 +197,44 @@ def get_run(run_id: str) -> dict:
     return _get_run(run_id)
 
 
+def _save_scene(data_url: str, run_id: str, item_id: str) -> str:
+    """Decode a data URL image (a camera capture) into previews/<run>/<item>_scene.jpg. Returns the repo-relative path."""
+    import base64
+    import re
+
+    m = re.match(r"^data:image/(?:jpeg|jpg|png|webp);base64,(.+)$", data_url, re.S)
+    if not m:
+        raise HTTPException(422, "scene_image must be a base64 data URL (jpeg, png or webp)")
+    try:
+        raw = base64.b64decode(m.group(1), validate=False)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(422, "scene_image is not valid base64") from e
+    if not (100 < len(raw) <= 8_000_000):
+        raise HTTPException(422, "scene_image is empty or larger than 8 MB")
+    rel = f"previews/{run_id}/{item_id}_scene.jpg"
+    (config.ROOT / rel).parent.mkdir(parents=True, exist_ok=True)
+    (config.ROOT / rel).write_bytes(raw)
+    return rel
+
+
 @app.post("/preview")
 def post_preview(req: PreviewRequest) -> dict:
+    """Place the item's matched product into a scene (the camera capture if sent, else its video frame) and check it.
+
+    Takes 15-40 s (image model, then the Decisions check). Returns the preview with its measured fidelity, or null
+    fidelity when the check could not run. A failure returns 502 with a clear message and never a fake image.
+    """
     item = _get_item(_get_run(req.run_id), req.item_id)
     best = _best(item)
-    path = make_preview(item.get("crop_path") or "", (best or {}).get("image_url") or "")
-    item["preview"] = {"image_path": path, "fidelity": 0.88, "regenerated": False}
+    if best is None or not best.get("image_url"):
+        raise HTTPException(422, f"item {req.item_id} has no matched product image to place")
+    scene = _save_scene(req.scene_image, req.run_id, req.item_id) if req.scene_image else item.get("frame_path")
+    if not scene:
+        raise HTTPException(422, f"item {req.item_id} has no scene image; send scene_image")
+    try:
+        item["preview"] = make_preview(scene, best["image_url"], req.run_id, req.item_id)
+    except PreviewError as e:
+        raise HTTPException(502, str(e)) from e
     return {"run_id": req.run_id, "item_id": req.item_id, "preview": item["preview"]}
 
 

@@ -389,7 +389,7 @@ Run locally; no deployment needed. Decide now who drives the screen, which scree
 ### 15g. Still unknown (verify, then record answers here)
 - Exact model IDs for the fast model and the image-edit model
 - Whether Argon accepts YouTube links
-- Whether the Decisions API accepts multiple images per input
+- ~~Whether the Decisions API accepts multiple images per input~~ **Yes** (tested with 3 images in one input, 2.6 s, backend/video/preview.py)
 - Whether the example agent profile is accepted by Shopify
 - Whether `create_cart` works on the merchants our test products come from
 - Rate limits on our Gemini key and on Shopify without a Catalog key
