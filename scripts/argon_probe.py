@@ -6,7 +6,10 @@ and reports rate-limit errors. Prints a summary of the answers.
 Must not: print the API key, build extract(), edit other directories, or send sampling
 params (temperature/topP/topK/candidateCount/thinkingBudget) to a Gemini 4 model.
 
-Usage: python scripts/argon_probe.py <youtube-url | local-video-path> [--no-direct]
+Saves every run to data/probe/<timestamp>.json (gitignored): input, model, timing, usage,
+raw text, parsed items and shape problems. Pass --out PATH to choose the file.
+
+Usage: python scripts/argon_probe.py <youtube-url | local-video-path> [--no-direct] [--out PATH]
 """
 import argparse
 import json
@@ -114,6 +117,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("video", help="YouTube URL or local video path")
     ap.add_argument("--no-direct", action="store_true", help="skip the direct-URL attempt")
+    ap.add_argument("--out", help="where to save the result JSON (default data/probe/<timestamp>.json)")
     args = ap.parse_args()
 
     if not config.GEMINI_API_KEY:
@@ -162,6 +166,18 @@ def main() -> int:
         answers["q2"] = ("YES: valid JSON matching the 15b spec." if ok
                          else "PARTIAL/NO: " + "; ".join(problems[:6]))
         answers["q3"] = f"generate_content took {secs:.1f}s ({usage}); rate limited: {rate_limited}"
+    if resp is not None:
+        try:
+            parsed = json.loads(re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.M).strip())
+        except json.JSONDecodeError:
+            parsed = None
+        out = Path(args.out) if args.out else (
+            Path(__file__).resolve().parent.parent / "data" / "probe" / f"{time.strftime('%Y%m%d-%H%M%S')}.json")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps({
+            "input": args.video, "model": config.GEMINI_ARGON_MODEL, "seconds": round(secs, 1), "usage": usage,
+            "shape_ok": ok, "shape_problems": problems, "items": parsed, "raw_text": text}, indent=2))
+        print(f"\nsaved: {out}")
     print("\n=== ANSWERS ===")
     print("1. YouTube direct?   ", answers.get("q1", "not determined"))
     print("2. JSON spec?        ", answers.get("q2", "not determined (no response)"))
