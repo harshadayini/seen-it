@@ -73,9 +73,10 @@ export default function ScanPage() {
         <label className="field">
           <span className="sr-only">{mode} link</span>
           <input
-            type="url"
+            type="text"
             inputMode="url"
-            placeholder={`Paste a ${mode.toLowerCase()} link`}
+            autoComplete="off"
+            placeholder={`Paste a ${mode.toLowerCase()} link or file path`}
             value={link}
             onChange={(e) => setLink(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && start()}

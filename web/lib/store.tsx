@@ -137,8 +137,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       setStartError("The backend isn't connected yet, so this is still showing the sample run.");
       return false;
     }
-    if (!video.trim()) {
-      setStartError("Paste a video link first.");
+    // Windows "Copy as path" wraps the path in quotes; strip them.
+    const source = video.trim().replace(/^["']|["']$/g, "");
+    if (!source) {
+      setStartError("Paste a video link or file path first.");
       return false;
     }
     setStarting(true);
@@ -146,7 +148,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch(`${API_URL}/run`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ video: video.trim(), mode }),
+        body: JSON.stringify({ video: source, mode }),
       });
       if (!res.ok) throw new Error(`Starting the run failed (${res.status})`);
       const data: Run = await res.json();
