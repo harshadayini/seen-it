@@ -12,7 +12,7 @@ import { BackIcon } from "@/components/Icons";
 import { StoreLink } from "@/components/StoreLink";
 import { CompareSlider } from "@/components/CompareSlider";
 import { API_URL, PREVIEW_PASS_FIDELITY } from "@/lib/config";
-import { bestCandidate, fmtPrice, merchantName, score } from "@/lib/format";
+import { bestCandidate, cleanTitle, fmtPrice, merchantName, score } from "@/lib/format";
 import { useStore } from "@/lib/store";
 
 /** The screen body (split out so useSearchParams sits under Suspense). */
@@ -51,7 +51,7 @@ function SeeIt() {
       <CompareSlider before="roomBefore" after="roomAfter" />
 
       <section className="detail">
-        <h1 className="h1">{best.title}</h1>
+        <h1 className="h1" title={best.title}>{cleanTitle(best.title)}</h1>
         <p className="sub">
           {merchantName(best.merchant_domain)} · <span className="num">{fmtPrice(best.price, best.currency)}</span>
         </p>

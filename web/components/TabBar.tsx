@@ -5,12 +5,13 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BagIcon, ListIcon, ScanIcon } from "./Icons";
+import { BagIcon, ListIcon, PulseIcon, ScanIcon } from "./Icons";
 import { useStore } from "@/lib/store";
 
 const TABS = [
   { href: "/", label: "Scan", Icon: ScanIcon },
   { href: "/results", label: "Results", Icon: ListIcon },
+  { href: "/stress", label: "Stress", Icon: PulseIcon },
   { href: "/cart", label: "Cart", Icon: BagIcon },
 ] as const;
 

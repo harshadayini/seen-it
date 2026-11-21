@@ -18,8 +18,8 @@ export interface AssetSpec {
 export const ASSETS = {
   scanRoom: { file: "scan-room.svg", alt: "Calm living room with a floor lamp, vase, rug and chair", size: "1170x1460" },
   deskEmpty: { file: "desk-empty.svg", alt: "Empty wooden desk by a window", size: "1600x1200" },
-  roomBefore: { file: "room-before.svg", alt: "Room corner before adding the product", size: "1600x2000" },
-  roomAfter: { file: "room-after.svg", alt: "The same room corner with the product placed", size: "1600x2000" },
+  roomBefore: { file: "photos/office-before.webp", alt: "A bare wooden home office with an empty desk", size: "1100x825" },
+  roomAfter: { file: "photos/office-after.webp", alt: "The same office styled with plants, art, a lamp and flowers", size: "1100x825" },
   productFloorLamp: { file: "product-floor-lamp.svg", alt: "Black arc floor lamp", size: "800x800" },
   productVase: { file: "product-vase.svg", alt: "Speckled ceramic vase", size: "800x800" },
   productRug: { file: "product-rug.svg", alt: "Textured rug", size: "800x800" },

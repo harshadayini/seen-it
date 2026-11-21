@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Asset } from "@/components/Asset";
+import { DropZone } from "@/components/DropZone";
 import { Feature } from "@/components/Feature";
 import { ArrowIcon, BagIcon } from "@/components/Icons";
 import { Spline3D } from "@/components/Spline3D";
@@ -22,10 +23,17 @@ const MODES: Mode[] = ["Video", "Photo", "Desk"];
 
 /** @returns the Scan screen. */
 export default function ScanPage() {
-  const { run, error, startRun, starting, startError, lines } = useStore();
+  const { run, error, startRun, starting, startError, uploadAndRun, uploading, lines } = useStore();
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("Video");
   const [link, setLink] = useState("");
+  const [fileName, setFileName] = useState<string | null>(null);
+
+  /** Uploads a dropped or chosen file, then follows the new run. */
+  async function onFile(file: File) {
+    setFileName(file.name);
+    if (await uploadAndRun(file)) router.push("/scene");
+  }
 
   /** Starts a real run for the pasted link, then shows results as they arrive. */
   async function start() {
@@ -70,6 +78,9 @@ export default function ScanPage() {
           )}
         </div>
 
+        <DropZone onFile={onFile} busy={uploading} fileName={fileName} accept={mode === "Video" ? "video/*" : "image/*"} />
+        <p className="or">or paste a link or file path</p>
+
         <label className="field">
           <span className="sr-only">{mode} link</span>
           <input
@@ -94,8 +105,6 @@ export default function ScanPage() {
         {!API_URL && <p className="note">Backend not connected: Results shows a sample run.</p>}
         {startError && <p className="note" role="alert">{startError}</p>}
       </section>
-
-      <TrustPanel />
 
       <Feature
         variant="pair"
@@ -135,6 +144,8 @@ export default function ScanPage() {
         low="roomColor"
         cta={{ label: "Preview one", href: "/see-it" }}
       />
+
+      <TrustPanel />
     </main>
   );
 }

@@ -26,6 +26,9 @@ interface Store {
   startRun: (video: string, mode?: "video" | "desk") => Promise<boolean>;
   starting: boolean;
   startError: string | null;
+  /** Send a local file to the backend (POST /upload) and start a run on it. Resolves true if started. */
+  uploadAndRun: (file: File) => Promise<boolean>;
+  uploading: boolean;
   /** Items that have a purchasable match (exact or similar with a variant id). */
   purchasable: Item[];
   selectedIds: string[];
@@ -77,6 +80,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
   }, [runId, error]);
   const [starting, setStarting] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [picked, setPicked] = useState<string[] | null>(null);
   const [urls, setUrls] = useState<Record<string, string | null>>({});
@@ -164,6 +168,32 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  /** Uploads a local file, then starts a run on the saved copy. Side effects: network calls. */
+  const uploadAndRun = useCallback(async (file: File) => {
+    setStartError(null);
+    if (!API_URL) {
+      setStartError("The backend isn't connected yet, so files can't be uploaded.");
+      return false;
+    }
+    setUploading(true);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch(`${API_URL}/upload`, { method: "POST", body });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        throw new Error(typeof detail?.detail === "string" ? detail.detail : `Upload failed (${res.status})`);
+      }
+      const saved: { path: string } = await res.json();
+      return await startRun(saved.path, "video");
+    } catch (e) {
+      setStartError(e instanceof Error ? e.message : "Upload failed");
+      return false;
+    } finally {
+      setUploading(false);
+    }
+  }, [startRun]);
+
   /** Asks the backend for one cart per merchant. Side effect: POST /cart. */
   const buildCarts = useCallback(async () => {
     setCartError(null);
@@ -188,6 +218,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
   }, [run, lines]);
 
-  const value: Store = { run, error, idle, startRun, starting, startError, purchasable, selectedIds, toggle, setOnly, add, lines, byMerchant, total, urls, buildCarts, busy, cartError };
+  const value: Store = { run, error, idle, startRun, starting, startError, uploadAndRun, uploading, purchasable, selectedIds, toggle, setOnly, add, lines, byMerchant, total, urls, buildCarts, busy, cartError };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

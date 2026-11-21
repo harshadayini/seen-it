@@ -16,7 +16,7 @@ import { BackIcon, CheckIcon, PlusIcon } from "@/components/Icons";
 import { SceneFrame } from "@/components/SceneFrame";
 import { StoreLink } from "@/components/StoreLink";
 import { API_URL, CROP_POSITIONS } from "@/lib/config";
-import { bestCandidate, fmtPrice, fmtRange, merchantName, pct } from "@/lib/format";
+import { bestCandidate, cleanTitle, fmtPrice, fmtRange, merchantName, pct } from "@/lib/format";
 import { useStore } from "@/lib/store";
 
 /** A labelled horizontal meter (a probability shown as a bar and a number). */
@@ -109,15 +109,29 @@ export default function ScenePage() {
 
           <section key={`d-${it.item_id}`} className="found" aria-label="What was found">
             <p className="new-flag">{processing && idx === n - 1 ? "Just found" : "Found"}</p>
+            <p className="sec-title">In your video</p>
+            <div className="orig">
+              <div className="tile"><CropImage path={it.crop_path} className="fillcrop" position={CROP_POSITIONS[idx % CROP_POSITIONS.length]} /></div>
+              <div className="orig-text">
+                <h2 className="found-title">{it.description ?? "Item"}</h2>
+                {it.attributes && (
+                  <ul className="chips-static" aria-label="Attributes">
+                    {Object.entries(it.attributes).filter(([, v]) => v).map(([k, v]) => <li key={k}><span>{k}</span> {String(v)}</li>)}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            <p className="sec-title">{it.status === "none" ? "On Shopify" : "Closest on Shopify"}</p>
             <div className="found-main">
               {it.status === "none" || !it.status ? (
-                <div className="tile empty"><CropImage path={it.crop_path} className="fillcrop" position={CROP_POSITIONS[idx % CROP_POSITIONS.length]} /></div>
+                <div className="tile empty"><span className="tile-note">{it.status === "none" ? "No match" : "Searching…"}</span></div>
               ) : (
                 <ProductImage url={best?.image_url} alt={best?.title ?? ""} category={category} />
               )}
               <div className="found-text">
                 <ConfidencePill status={it.status} p={best?.p_same_product} />
-                <h2 className="found-title">{it.status === "none" ? it.description : best?.title ?? it.description}</h2>
+                <h3 className="found-title" title={best?.title}>{it.status === "none" || !it.status ? "No product to show" : cleanTitle(best?.title)}</h3>
                 {it.status === "none" ? (
                   <p className="sub">Nothing was trusted enough to show.</p>
                 ) : !it.status ? (
@@ -129,14 +143,6 @@ export default function ScenePage() {
               </div>
             </div>
 
-            {it.description && <p className="body">Seen as: {it.description}</p>}
-
-            {it.attributes && (
-              <ul className="chips-static" aria-label="Attributes">
-                {Object.entries(it.attributes).filter(([, v]) => v).map(([k, v]) => <li key={k}><span>{k}</span> {String(v)}</li>)}
-              </ul>
-            )}
-
             {best && it.status !== "none" && (
               <div className="meters">
                 <Meter label="Same product" p={best.p_same_product} />
@@ -145,15 +151,16 @@ export default function ScenePage() {
             )}
 
             {(it.candidates?.length ?? 0) > 1 && (
-              <div className="alts" aria-label="Other matches">
-                <p className="sub">Other matches</p>
+              <div className="alts" aria-label="More from Shopify">
+                <p className="sec-title">More from Shopify</p>
                 <ul>
                   {it.candidates!.filter((c) => c !== best).slice(0, 3).map((c, i) => (
                     <li key={`${c.variant_id ?? c.title}-${i}`}>
                       <ProductImage url={c.image_url} alt={c.title} category={category} className="alt-tile" />
                       <StoreLink candidate={c} className="alt-link" label="Store ↗" />
+                      <span className="alt-name" title={c.title}>{cleanTitle(c.title, 24)}</span>
                       <span className="alt-price num">{fmtPrice(c.price, c.currency)}</span>
-                      <span className="alt-p num">{pct(c.p_same_product)}</span>
+                      <span className="alt-p num">{pct(c.p_same_product)} match</span>
                     </li>
                   ))}
                 </ul>

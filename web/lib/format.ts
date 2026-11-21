@@ -51,6 +51,29 @@ export function merchantName(domain: string | null | undefined): string {
   return (domain ?? "unknown").replace(/\.myshopify\.com$/, "");
 }
 
+/**
+ * Tidy a marketplace product title for display. Shopify titles often carry SEO text after a
+ * separator ("... | Free Shipping"), spec lists in brackets and shouting capitals.
+ * @param title raw catalog title @param max visible character budget @returns a short, clean title
+ */
+const ACRONYMS = new Set(["LG", "IPS", "LED", "LCD", "OLED", "FHD", "UHD", "HD", "HDR", "HDMI", "USB", "RGB", "TV", "PC", "UV", "AI", "4K", "8K", "5G"]);
+
+export function cleanTitle(title: string | null | undefined, max = 54): string {
+  let t = (title ?? "").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+  if (!t) return "Item";
+  const first = t.split(/\s+[|–—]\s+|\s+-\s+/)[0];
+  if (first.length >= 8) t = first;
+  t = t.replace(/\s*[[(][^\])]*[\])]/g, "").replace(/\s{2,}/g, " ").trim();
+  const letters = t.replace(/[^A-Za-z]/g, "");
+  if (letters.length > 6 && letters === letters.toUpperCase()) {
+    // Shouting capitals: title-case the words but keep well-known acronyms in capitals.
+    t = t.split(" ").map((w) => (ACRONYMS.has(w.replace(/[^A-Za-z0-9]/g, "")) ? w : w.charAt(0) + w.slice(1).toLowerCase())).join(" ");
+  }
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max).replace(/\s+\S*$/, "");
+  return `${cut.replace(/[,;:\-–]+$/, "")}…`;
+}
+
 /** Readable title from a video id: "v_roomtour_01" -> "Roomtour 01". */
 export function humanize(id: string | null | undefined): string {
   if (/^https?:\/\//i.test(id ?? "")) return "Your video";

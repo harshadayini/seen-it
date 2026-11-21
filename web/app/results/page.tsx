@@ -1,10 +1,9 @@
 /**
- * Screen 2, Results: a ghost-word header, category filters, then a two-column shelf of found
- * items. Each card is a product on a tinted tile with its real crop as a small badge, a
- * plain-word confidence pill, store and price. "No match" is shown honestly.
- * A sticky bar adds the selected items to the cart.
- * Boundary: reads the shared store only; crops fall back to placeholders until the backend
- * supplies them.
+ * Screen 2, Results: a ghost-word header, category filters, then one card per found item.
+ * Each card reads left to right: what was in YOUR video, then the closest product on Shopify,
+ * then a few more similar products, each clearly labelled with price, store and a plain-word
+ * confidence. "No match" is shown honestly. A sticky bar adds the selected items to the cart.
+ * Boundary: reads the shared store only; crops fall back to placeholders until supplied.
  */
 "use client";
 import Link from "next/link";
@@ -15,7 +14,7 @@ import { EmptyRun } from "@/components/EmptyRun";
 import { CheckIcon, PlusIcon } from "@/components/Icons";
 import { StoreLink } from "@/components/StoreLink";
 import { CROP_POSITIONS } from "@/lib/config";
-import { bestCandidate, fmtPrice, fmtRange, fmtTime, humanize, merchantName } from "@/lib/format";
+import { bestCandidate, cleanTitle, fmtPrice, fmtRange, fmtTime, humanize, merchantName, pct } from "@/lib/format";
 import { useStore } from "@/lib/store";
 
 /** @returns the Results screen. */
@@ -57,7 +56,7 @@ export default function ResultsPage() {
         </div>
       )}
 
-      <ul className="grid">
+      <ul className="rlist">
         {items.map((it, i) => {
           const best = bestCandidate(it);
           const none = it.status === "none";
@@ -65,52 +64,72 @@ export default function ResultsPage() {
           const buyable = !none && !looking && !!best?.variant_id;
           const inCart = selectedIds.includes(it.item_id);
           const category = String(it.attributes?.category ?? "");
+          const others = (it.candidates ?? []).filter((c) => c !== best).slice(0, 3);
           return (
-            <li key={it.item_id} className={`card ${none ? "none" : ""}`}>
-              <div className="tile-wrap">
-                {none || looking ? (
-                  <div className="tile empty"><CropImage path={it.crop_path} className="fillcrop" position={CROP_POSITIONS[i % CROP_POSITIONS.length]} /></div>
-                ) : (
-                  <ProductImage url={best?.image_url} alt={best?.title ?? ""} category={category} />
-                )}
-                {!none && !looking && (
-                  <CropImage path={it.crop_path} className="crop-badge" position={CROP_POSITIONS[i % CROP_POSITIONS.length]} />
-                )}
-                {buyable && (
-                  <button
-                    type="button"
-                    className={`round add ${inCart ? "on" : ""}`}
-                    aria-pressed={inCart}
-                    aria-label={inCart ? `Remove ${best?.title} from cart` : `Add ${best?.title} to cart`}
-                    onClick={() => toggle(it.item_id)}
-                  >
-                    {inCart ? <CheckIcon /> : <PlusIcon />}
-                  </button>
-                )}
+            <li key={it.item_id} className="rcard">
+              <div className="rcard-head">
+                <span className="idx num">{run.items.indexOf(it) + 1}</span>
+                <h2 className="rcard-title">{it.description ?? "Item"}</h2>
+                <span className="when num">{fmtRange(it.t_start, it.t_end)}</span>
               </div>
-              <ConfidencePill status={it.status} p={best?.p_same_product} />
-              {none ? (
-                <>
-                  <h2 className="card-title muted">{it.description}</h2>
-                  <p className="sub">Nothing was trusted enough to show.</p>
-                </>
-              ) : looking ? (
-                <>
-                  <h2 className="card-title">{it.description}</h2>
-                  <p className="sub">Searching the catalog…</p>
-                </>
-              ) : (
-                <>
-                  <h2 className="card-title">{best?.title ?? it.description}</h2>
-                  <p className="sub">
-                    {merchantName(best?.merchant_domain)} · <span className="num">{fmtPrice(best?.price, best?.currency)}</span>
-                  </p>
+
+              <div className="duo">
+                <figure className="duo-col">
+                  <figcaption>In your video</figcaption>
+                  <div className="tile"><CropImage path={it.crop_path} className="fillcrop" position={CROP_POSITIONS[i % CROP_POSITIONS.length]} /></div>
+                </figure>
+                <span className="duo-arrow" aria-hidden="true">→</span>
+                <figure className="duo-col">
+                  <figcaption>{none ? "On Shopify" : "Closest on Shopify"}</figcaption>
+                  {none || looking ? (
+                    <div className="tile empty"><span className="tile-note">{looking ? "Searching…" : "No match"}</span></div>
+                  ) : (
+                    <ProductImage url={best?.image_url} alt={best?.title ?? ""} category={category} />
+                  )}
+                </figure>
+              </div>
+
+              <div className="rcard-body">
+                <div className="row">
+                  <ConfidencePill status={it.status} p={best?.p_same_product} />
                   {it.recovered && <span className="signal">Found on second look</span>}
-                  <Link href={`/see-it?item=${it.item_id}`} className="link">See it here</Link>
-                  <StoreLink candidate={best} />
-                </>
+                </div>
+                {none ? (
+                  <p className="sub">Nothing on Shopify was trusted enough to show.</p>
+                ) : looking ? (
+                  <p className="sub">Searching the catalog…</p>
+                ) : (
+                  <>
+                    <h3 className="card-title" title={best?.title}>{cleanTitle(best?.title)}</h3>
+                    <p className="sub">{merchantName(best?.merchant_domain)} · <span className="num price">{fmtPrice(best?.price, best?.currency)}</span></p>
+                  </>
+                )}
+                <div className="row-actions-inline">
+                  {buyable && (
+                    <button type="button" className={`btn small ${inCart ? "primary" : "outline"}`} aria-pressed={inCart} onClick={() => toggle(it.item_id)}>
+                      {inCart ? <><CheckIcon /> In cart</> : <><PlusIcon /> Add to cart</>}
+                    </button>
+                  )}
+                  {buyable && <Link href={`/see-it?item=${it.item_id}`} className="link">See it here</Link>}
+                  {buyable && <StoreLink candidate={best} />}
+                </div>
+              </div>
+
+              {others.length > 0 && (
+                <div className="more">
+                  <p className="sec-title">More from Shopify</p>
+                  <ul>
+                    {others.map((c, k) => (
+                      <li key={`${c.variant_id ?? c.title}-${k}`}>
+                        <ProductImage url={c.image_url} alt={c.title} category={category} className="more-tile" />
+                        <span className="more-name" title={c.title}>{cleanTitle(c.title, 26)}</span>
+                        <span className="num more-price">{fmtPrice(c.price, c.currency)} · {pct(c.p_same_product)}</span>
+                        <StoreLink candidate={c} className="alt-link" label="Store ↗" />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
-              <p className="when num">{fmtRange(it.t_start, it.t_end)}</p>
             </li>
           );
         })}

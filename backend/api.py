@@ -12,11 +12,15 @@ from backend import config
 from backend.matching import resolve
 from backend.shopify import create_cart
 from backend.shopify.cart import CartError, update_cart
+from backend.stress.router import router as stress_router
+from backend.uploads import router as uploads_router
 from backend.video import desk_items, extract
 from backend.video import preview as make_preview
 
 log = logging.getLogger("seen_it.api")
 app = FastAPI(title="Seen It")
+app.include_router(uploads_router)  # POST /upload (P3): local video/photo from the web app
+app.include_router(stress_router)  # /stress (P3): damage a clip, measure recall, show recovery
 # The web app (Next.js dev server) runs on another port and loads crops from /frames.
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
                    allow_methods=["*"], allow_headers=["*"])
