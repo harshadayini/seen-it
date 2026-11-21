@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -55,6 +56,7 @@ RUNS: dict[str, dict] = {}
 PREVIEW_JOBS: dict[tuple[str, str], dict] = {}  # (run_id, item_id) -> {status, preview?, error?}
 _STARTED: dict[str, tuple] = {}  # run_id -> (request key, start time), for duplicate-request detection
 _counter = itertools.count(1)
+_BOOT = secrets.token_hex(2)  # makes run ids unique per server start, so a stale browser tab never matches a new run
 # Items resolved at once. Kept small: Gemini calls are capped near 5 (AGENT_RULES 3.4) and the
 # Shopify catalog rate-limits (its client retries 429s with backoff).
 RESOLVE_WORKERS = 4
@@ -210,7 +212,7 @@ def post_run(req: RunRequest, background: BackgroundTasks) -> dict:
         if old and old["state"] == "processing" and started[0] == key and time.monotonic() - started[1] < DEDUPE_WINDOW_S:
             log.info("duplicate POST /run for %s: returning %s", key[1], old_id)
             return dict(old)
-    run_id = f"r_{next(_counter):03d}"
+    run_id = f"r_{_BOOT}{next(_counter):03d}"
     _STARTED[run_id] = (key, time.monotonic())
     run = {
         "run_id": run_id,
@@ -241,7 +243,7 @@ def post_run_replay(req: ReplayRequest) -> dict:
     if saved.get("state") not in ("done", "failed"):
         raise HTTPException(422, f"saved run {req.run_id} is not finished")
     run = copy.deepcopy(saved)
-    run["run_id"] = f"r_{next(_counter):03d}"
+    run["run_id"] = f"r_{_BOOT}{next(_counter):03d}"
     RUNS[run["run_id"]] = run
     log.info("replay saved=%s as=%s items=%d", req.run_id, run["run_id"], len(run.get("items", [])))
     return run
