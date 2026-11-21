@@ -14,6 +14,9 @@ const apiTarget = process.env.API_PROXY_TARGET;
 const nextConfig = {
   // Pin the workspace root so Next ignores unrelated lockfiles higher up the disk.
   outputFileTracingRoot: path.dirname(fileURLToPath(import.meta.url)),
+  // "See it here" uploads a photo or video (up to 60 MB) through the /backend proxy: allow big bodies
+  // (the default buffers only 10 MB) and give the backend time to extract frames.
+  experimental: { middlewareClientMaxBodySize: "64mb", proxyTimeout: 120_000 },
   async rewrites() {
     return apiTarget ? [{ source: "/backend/:path*", destination: `${apiTarget}/:path*` }] : [];
   },
