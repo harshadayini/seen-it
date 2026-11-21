@@ -117,7 +117,12 @@ def test_post_preview_upstream_failure_is_502_not_a_fake_image(monkeypatch):
     assert finished(run)["items"][0].get("preview") == before  # a failed call never writes a preview
 
 
-def test_post_cart():
+def test_post_cart(monkeypatch):
+    # The real create_cart calls live merchants; tests use a local fake so they never hit the network.
+    monkeypatch.setattr(
+        "backend.api.create_cart",
+        lambda domain, variant, qty=1: {"cart_id": f"gid://shopify/Cart/t-{domain}", "continue_url": f"https://{domain}/cart/c/t"},
+    )
     run = finished(client.post("/run", json={"video": "demo.mp4"}).json())
     r = client.post("/cart", json={"run_id": run["run_id"], "item_ids": ["i1", "i2"]})
     assert r.status_code == 200

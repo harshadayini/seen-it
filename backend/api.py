@@ -18,6 +18,7 @@ from backend import config
 from backend.matching import resolve
 from backend.matching.status import STATUS_RANK
 from backend.shopify import create_cart
+from backend.shopify.cart import CartError, update_cart
 from backend.video import desk_items, extract
 from backend.video.relook import relook
 from backend.video.preview import PreviewError, make_preview
@@ -299,7 +300,12 @@ def post_cart(req: CartRequest) -> dict:
         by_merchant.setdefault(best["merchant_domain"], []).append((item, best))
     carts = []
     for domain, pairs in by_merchant.items():
-        cart = create_cart(domain, pairs[0][1]["variant_id"], 1)
+        try:
+            cart = create_cart(domain, pairs[0][1]["variant_id"], 1)
+            if len(pairs) > 1:  # every extra item from the same store goes into the same cart
+                cart = update_cart(domain, cart["cart_id"], [{"quantity": 1, "item": {"id": b["variant_id"]}} for _, b in pairs])
+        except CartError as exc:  # clean structured error, never a fake cart
+            raise HTTPException(502, {"error": exc.code, "message": exc.message, "merchant_domain": domain})
         for item, _ in pairs:
             item["cart"] = dict(cart)
         carts.append({"merchant_domain": domain, "item_ids": [i["item_id"] for i, _ in pairs], **cart})

@@ -26,7 +26,7 @@ What this module must NOT do:
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from backend.config import CONFIG, AppConfig
 from backend.matching.logging_utils import get_logger, log_function_call
@@ -117,6 +117,24 @@ def _extract_merchant_domain(variant: dict[str, Any]) -> str | None:
             return parsed.hostname.lower()
 
     return None
+
+
+def _extract_product_url(variant: dict[str, Any]) -> str | None:
+    """Return the merchant's product-page URL for a variant, without Shopify tracking params.
+
+    Args:
+        variant: Raw UCP variant dictionary (its `url` is the storefront page, with `?variant=`).
+    Returns:
+        An https URL, or None if the variant has no usable URL. Drops `_gsid` and `utm_*`.
+    """
+    raw = variant.get("url")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    parsed = urlparse(raw.strip())
+    if parsed.scheme != "https" or not parsed.hostname:
+        return None
+    keep = [(k, v) for k, v in parse_qsl(parsed.query) if k == "variant"]
+    return urlunparse(parsed._replace(query=urlencode(keep), fragment=""))
 
 
 def _extract_price(
@@ -251,7 +269,7 @@ def normalize_products_to_candidates(
             title = _build_candidate_title(product, variant)
             merchant_domain = _extract_merchant_domain(variant)
             image_url = _extract_image_url(variant, product)
-            product_url = variant.get("url") if isinstance(variant.get("url"), str) and variant["url"].startswith("https://") else None
+            product_url = _extract_product_url(variant)
 
             candidate = Candidate(
                 title=title,

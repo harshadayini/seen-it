@@ -197,7 +197,7 @@ Add to `.gitignore`: `.env`, `data/`, `frames/`, `previews/`, `eval/results/raw/
 
 We use Shopify only through its agentic-commerce stack (UCP, Shopify Catalog, shop.dev). We do **not** use the Admin or Storefront GraphQL APIs, and we don't run our own store.
 
-**Discovery.** Global Catalog MCP at `https://catalog.shopify.com/api/ucp/mcp`. It searches across all eligible Shopify merchants ("eligible" does not mean literally every store). It works without a key at the lowest rate limits; **create a key now** in the Dev Dashboard (Agents) for higher limits. Exchange the client ID and secret at `POST https://api.shopify.com/auth/access_token` with `grant_type: client_credentials` to get a bearer token. Requests are JSON-RPC `tools/call`, and every one must include `meta.ucp-agent.profile` (the URI of our agent profile; the hosted `cart-and-checkout` example profile does NOT declare catalog search, so `search_catalog` returns "Tool not found". Use our own profile, `contracts/ucp-agent-profile.json`, served as application/json through jsDelivr: `https://cdn.jsdelivr.net/gh/harshadayini/seen-it@main/contracts/ucp-agent-profile.json`; GitHub raw serves text/plain and is rejected).
+**Discovery.** Global Catalog MCP at `https://catalog.shopify.com/api/ucp/mcp`. It searches across all eligible Shopify merchants ("eligible" does not mean literally every store). It works without a key at the lowest rate limits; **create a key now** in the Dev Dashboard (Agents) for higher limits. Exchange the client ID and secret at `POST https://api.shopify.com/auth/access_token` with `grant_type: client_credentials` to get a bearer token. Requests are JSON-RPC `tools/call`, and every one must include `meta.ucp-agent.profile` (the URI of our agent profile; the hosted `cart-and-checkout` example profile does NOT declare catalog search (`search_catalog` returns "Tool not found"), so use `valid-with-capabilities.json`, as in `.env.example`.
 
 Tools:
 - `search_catalog`: free-text `catalog.query` plus filters (max price, ships-to, currency). Image input exists but has been **reported failing with a service error**. Test it once; **text queries are our default.**
@@ -234,7 +234,7 @@ GEMINI_DECISION_MODEL=gemini-decision-1
 GEMINI_IMAGE_MODEL=           # current image-edit model ID
 SHOPIFY_CLIENT_ID=
 SHOPIFY_CLIENT_SECRET=
-SHOPIFY_AGENT_PROFILE_URL=https://shopify.dev/ucp/agent-profiles/examples/2026-04-08/cart-and-checkout.json
+SHOPIFY_AGENT_PROFILE_URL=https://shopify.dev/ucp/agent-profiles/examples/2026-04-08/valid-with-capabilities.json
 ```
 
 Tools needed: Python 3.11+, Node 20+, `ffmpeg`, `yt-dlp` (for downloading videos if Argon rejects YouTube links), the Shop CLI (`npm install --global @shopify/shop`).

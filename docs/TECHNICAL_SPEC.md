@@ -1,4 +1,4 @@
-> **REFERENCE ONLY, NOT AUTHORITATIVE.** Written for an earlier TypeScript/Express plan. `CLAUDE.md` wins on stack (Python/FastAPI backend, Next.js in `web/`), scope, models, file ownership and the data contract. Use this file for ideas only; do not build to it. Rules live in `AGENT_RULES.md`.
+> **REFERENCE ONLY, NOT AUTHORITATIVE.** `CLAUDE.md` wins on stack (Python/FastAPI backend, Next.js in `web/`), scope, models, file ownership and the data contract. This file has been updated to the same stack (Python backend, Next.js frontend); the Gemini tier names and scope below are still ideas only, so check `CLAUDE.md` before building to them (for example, Carbon is limited to approved testers). Rules live in `AGENT_RULES.md`.
 
 # Seen It — Technical Architecture & Specification (`TECHNICAL_SPEC.md`)
 
@@ -10,7 +10,7 @@ This document specifies the complete technical architecture for **Seen It**, cov
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────┐
-│                         React + Vite Frontend                              │
+│                      Next.js Frontend (TypeScript, web/)                   │
 │  • Omnimodal Intake (Video, Audio/Song, Images, Pinterest/Board URL, Text) │
 │  • Interactive Timeline Scrubber, Item Pins & Audio Constraint Callouts    │
 │  • Tiered Escalation & Calibrated Confidence Inspector (Stress Lab)        │
@@ -20,7 +20,7 @@ This document specifies the complete technical architecture for **Seen It**, cov
 └────────────────────────────────────┬───────────────────────────────────────┘
                                      │ HTTP / SSE (JSON, Multipart, Stream)
 ┌────────────────────────────────────▼───────────────────────────────────────┐
-│                      Express + TypeScript Backend                          │
+│                        Python + FastAPI Backend                            │
 │                                                                            │
 │  [Centralized Config]   [Structured Logger (strips inline base64/secrets)] │
 │                                                                            │
@@ -50,14 +50,14 @@ This document specifies the complete technical architecture for **Seen It**, cov
 ## 2. Gemini 4, Decisions API & Media Generation Stack
 
 ### 2.1 SDK & Client Initialization Rules
-* **SDK Version:** Upgrade `@google/genai` to `>= 3.3.0` (`npm i @google/genai@latest`) so `ai.decisions.create`, `ThinkingLevel.XHIGH`, and all Gemini 4 models are supported.
-* **Server-Side Only:** `@google/genai` is imported and invoked exclusively in server-side Express modules using `process.env.GEMINI_API_KEY`.
+* **SDK Version:** Use the latest Python `google-genai` package (`pip install -U google-genai`) so the Decisions API (`client.decisions.create`), the `XHIGH` thinking level, and all Gemini 4 models are supported. Verify exact names against the installed SDK.
+* **Server-Side Only:** `google-genai` is imported and invoked exclusively in the Python FastAPI backend, with the key read from the `GEMINI_API_KEY` environment variable. The Next.js frontend never imports a Gemini SDK or sees the key.
 * **Two Dedicated Clients:**
-  1. `genaiClient`: Default client for Gemini 4 (`generateContent` / `generateContentStream`) and image generation, initialized with `httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }`.
-  2. `decisionsClient`: Dedicated client initialized with `apiVersion: "v1beta"` and `'User-Agent': 'aistudio-build'` strictly for `ai.decisions.create` (`gemini-decision-1` is `v1beta`-only; calling on `v1` returns `404`).
+  1. `genai_client`: Default client for Gemini 4 (`generate_content` / streaming) and image generation, created with `http_options` setting the header `'User-Agent': 'aistudio-build'`.
+  2. `decisions_client`: Dedicated client created with API version `v1beta` and `'User-Agent': 'aistudio-build'` strictly for `decisions.create` (`gemini-decision-1` is `v1beta`-only; calling on `v1` returns `404`).
 * **Parameter Discipline on Gemini 4:**
   * NEVER pass deprecated `temperature`, `topP`, `topK`, `candidateCount`, or `thinkingBudget` to `gemini-4-hydrogen`, `gemini-4-neon`, `gemini-4-carbon`, or `gemini-4-argon`.
-  * Use `thinkingConfig: { thinkingLevel: ThinkingLevel.* }` where appropriate (`XHIGH` is supported only on `gemini-4-neon` and `gemini-4-hydrogen`; `HIGH`/`MEDIUM`/`LOW` on all four; never `MINIMAL`).
+  * Use a thinking config with `thinking_level` set to the SDK's `ThinkingLevel` enum where appropriate (`XHIGH` is supported only on `gemini-4-neon` and `gemini-4-hydrogen`; `HIGH`/`MEDIUM`/`LOW` on all four; never `MINIMAL`).
 
 ### 2.2 Tiered Escalation Pipeline
 
@@ -125,7 +125,7 @@ For each target item `I` and top `K` Shopify candidate variants (e.g., `K = 6..1
    * Do **NOT** cache Shopify catalog responses to disk or database.
    * Do **NOT** download, proxy-cache, or re-host merchant product images.
    * Server fetches merchant image bytes strictly into ephemeral RAM only for Gemini Decisions verification and Scene-Swap compositing, then immediately discards them.
-   * Frontend renders `<img src={variant.imageUrl} />` directly from the merchant's original URL.
+   * The Next.js frontend renders `<img src={candidate.image_url} />` directly from the merchant's original URL.
    * Persist ONLY lightweight identifiers & evaluation outputs: **UPIDs, variant IDs, merchant domains, and calibrated decision scores**.
 4. **Demo Safety:** Never complete real orders during development or demos; stop at live Cart MCP (`create_cart` / `update_cart`) and `continue_url` handoff.
 
@@ -140,20 +140,22 @@ For each target item `I` and top `K` Shopify candidate variants (e.g., `K = 6..1
   * Fallback: Serve our own static agent profile JSON at `GET /.well-known/ucp-agent-profile.json` using `APP_URL` if Shopify's example profile is ever rejected.
 
 ### 3.3 Typed Shopify UCP Client Interface
-Planned server module surface (`src/server/shopify/` split by concern):
+Planned Python module surface (`backend/shopify/`, split by concern; `catalog.py` is P2, `cart.py` is P3):
 
-```ts
-// Discovery (Global Catalog MCP: https://catalog.shopify.com/api/ucp/mcp)
-searchCatalog(query: string, filters?: CatalogSearchFilters): Promise<CatalogSearchResult>;
-lookupCatalog(ids: string[]): Promise<CatalogProduct[]>; // auto-chunked in batches of <= 50
-getProduct(upid: string): Promise<CatalogProductDetail>;
+```python
+# Discovery (Global Catalog MCP: https://catalog.shopify.com/api/ucp/mcp)
+def search_catalog(query: str, filters: dict | None = None) -> list[Candidate]: ...
+def lookup_catalog(ids: list[str]) -> list[Candidate]: ...  # auto-chunked in batches of <= 50
+def get_product(upid: str) -> dict: ...
 
-// Merchant Discovery & Cart MCP (https://{shop-domain}/.well-known/ucp -> /api/ucp/mcp)
-discoverMerchantUcp(merchantDomain: string): Promise<MerchantUcpManifest>;
-createCart(merchantDomain: string, variantId: string, qty: number): Promise<MerchantCart>;
-updateCart(merchantDomain: string, cartId: string, lineItems: CartLineItemInput[]): Promise<MerchantCart>;
-getContinueUrl(cart: MerchantCart): string | null;
+# Merchant Discovery & Cart MCP (https://{shop-domain}/.well-known/ucp -> /api/ucp/mcp)
+def discover_merchant_ucp(merchant_domain: str) -> dict: ...
+def create_cart(merchant_domain: str, variant_id: str, qty: int = 1) -> dict: ...
+def update_cart(merchant_domain: str, cart_id: str, line_items: list[dict]) -> dict: ...
+def get_continue_url(cart: dict) -> str | None: ...
 ```
+
+The Next.js app never calls these directly. It talks to the FastAPI endpoints (`POST /run`, `GET /run/<id>`, `POST /preview`, `POST /cart`).
 
 * **`search_catalog` Defaults:** Uses free-text `catalog.query` plus filters (`max_price`, `ships_to`, `currency`, etc.). Image-input parameter is intentionally disabled by default due to reported upstream service errors.
 * **Normalized Domain Model:** Results grouped by Universal Product ID (`upid`) with nested `variants[]`, retaining each variant's `variantId`, `price`, `currency`, `merchantDomain`, `title`, `options`, and `imageUrl`.
@@ -166,7 +168,7 @@ getContinueUrl(cart: MerchantCart): string | null;
 * **Reliability:** Exponential backoff with jitter on HTTP `429` and transient `5xx` errors, respecting `Retry-After` headers when present.
 
 ### 3.4 Smoke-Test Script Spec
-A standalone runnable script (e.g., `scripts/smoke-shopify-ucp.ts`) that verifies live end-to-end UCP behavior before UI integration:
+A standalone runnable Python script (`scripts/shopify_smoke.py`, owned by P3) that verifies live end-to-end UCP behavior before UI integration:
 1. Acquires bearer token via `client_credentials` (verifying token cache hit on second call).
 2. Runs one `searchCatalog(...)` call and parses returned UPIDs + variant IDs + merchant domains.
 3. Runs one `lookupCatalog([...])` and `getProduct(upid)` call.
@@ -185,43 +187,30 @@ A standalone runnable script (e.g., `scripts/smoke-shopify-ucp.ts`) that verifie
 
 ## 5. Planned Modular Directory Layout (When Build Begins)
 
-Following the one-file-per-feature architecture and centralized configuration guidelines:
+The authoritative layout and file ownership are in `CLAUDE.md` section 6. In short, a Python/FastAPI backend and a Next.js frontend, with one file per feature and one centralized config:
 
 ```text
 /
-├── Design.md
-├── TECHNICAL_SPEC.md
+├── CLAUDE.md                       # source of truth
 ├── AGENT_RULES.md
-├── UI_DESIGN_PROMPT.md
-├── PROJECT_ROADMAP.md
 ├── .env.example
-├── scripts/
-│   └── smoke-shopify-ucp.ts        # Live UCP search + lookup + cart smoke test
-└── src/
-    ├── config/
-    │   └── appConfig.ts            # ALL model names, thinking levels, thresholds, UCP URLs, retry limits
-    ├── server/
-    │   ├── logger.ts               # Structured INFO logger (strips inline base64 data & redacts secrets)
-    │   ├── genai/
-    │   │   ├── client.ts           # Shared genaiClient + v1beta decisionsClient
-    │   │   ├── scoutHydrogen.ts    # Tier 1: gemini-4-hydrogen manifest & query fan-out
-    │   │   ├── decisionVerifier.ts # Calibrated Gate: gemini-decision-1 rubric batching
-    │   │   ├── escalateNeon.ts     # Tier 2: gemini-4-neon forensic query repair
-    │   │   ├── escalateCarbon.ts   # Tier 3: gemini-4-carbon deep cross-modal reconciliation
-    │   │   ├── sceneSwapper.ts     # Multi-product Swap Into Frame (gemini-nano-banana-2.1)
-    │   │   └── vibeExtractor.ts    # Song / Pinterest board / moodboard vibe synthesis
-    │   ├── shopify/
-    │   │   ├── auth.ts             # OAuth2 client_credentials token manager + cache
-    │   │   ├── rpcClient.ts        # JSON-RPC tools/call wrapper + exponential backoff retry
-    │   │   ├── catalogClient.ts    # searchCatalog, lookupCatalog, getProduct
-    │   │   ├── merchantDiscovery.ts# /.well-known/ucp resolution
-    │   │   └── cartClient.ts       # createCart, updateCart, getContinueUrl
-    │   ├── pipeline/
-    │   │   ├── orchestration.ts    # End-to-end tiered escalation loop + SSE progress emitter
-    │   │   └── stressMetrics.ts    # Element 119 breaking-point telemetry & failure categorization
-    │   └── routes/                 # One Express router file per API domain
-    └── client/                     # Modular React UI components per feature
+├── contracts/run.schema.json       # shared data contract
+├── fixtures/sample_run.json
+├── backend/                        # Python + FastAPI
+│   ├── api.py                      # thin endpoints: POST /run, GET /run/<id>, POST /preview, POST /cart
+│   ├── video/                      # P1: extract.py, relook.py, preview.py, desk.py
+│   ├── matching/                   # P2: catalog.py, checker.py, status.py, budget.py
+│   └── shopify/                    # catalog.py (P2), cart.py (P3); auth, JSON-RPC + backoff, discovery
+├── eval/                           # run_eval.py, baseline.py, stress.py, metrics.py
+├── web/                            # Next.js (TypeScript): P3
+│   ├── app/                        # pages + the /api/run fixture stub
+│   ├── components/                 # Player, ItemCard, Badge, Bag
+│   └── lib/                        # types mirroring the contract, polling hook, formatters
+└── scripts/
+    └── shopify_smoke.py            # live UCP search + lookup + cart smoke test (P3)
 ```
+
+Central config (model IDs, thinking levels, thresholds, UCP URLs, retry limits) lives in one Python config module in `backend/`; the logger strips inline base64 and redacts secrets.
 
 ---
 

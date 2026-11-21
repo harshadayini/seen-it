@@ -55,7 +55,7 @@ class Candidate:
     price: float | None = None
     currency: str | None = None
     image_url: str | None = None
-    product_url: str | None = None  # merchant's product page (Shopify variant url), shown as "View on store"
+    product_url: str | None = None  # the merchant's own product page (for the UI's "View on store" link)
     p_same_product: float | None = None
     p_same_variant: float | None = None
     # Ephemeral desk-mode scoring fields (kept out of to_dict() wire output)
