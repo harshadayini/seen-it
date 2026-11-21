@@ -11,12 +11,13 @@ Everyone reads this file first. If you change a contract, a function signature, 
 
 ## 1. What we're building
 
-Drop in a video or photo, or just point your camera. The app finds what's in it (or what's missing from it), matches each item to real Shopify products with honest confidence scores, then drops those products into a virtual twin of your own space, scaled to its real dimensions, so you know they fit before you buy. It builds the cart.
-The virtual twin: Every space you film becomes a twin with real measurements, so you can see one product in your desk, bedroom and living room at once, each with a fit verdict.
+Drop in a video or photo. The app finds what's **in** it (or what's **missing** from it), matches each item to real Shopify products with honest confidence scores, previews the products in your own scene, and builds the cart.
 
-Pitch line: "Every video becomes shoppable, with confidence you can trust."
+Pitch line: **"Every video becomes shoppable, with confidence you can trust."**
 
-Why it fits Element 119: A text description throws away the exact color, finish, shape and size that identify a product and decide whether it fits a room. The input is messy by nature (motion blur, quick cuts, half-hidden items, bad light), and voice and pointing drive it. We push it until it breaks, show where, and show how it recovers.
+Why it fits Element 119: a text description throws away the exact color, finish and shape that identify a product. The input is messy by nature (motion blur, quick cuts, half-hidden items). We push it until it breaks, show where, and show how it recovers.
+
+**Stretch goal, not in scope:** a "virtual twin" of the user's space (real measurements, fit verdicts, camera/voice input). No section below builds it. Do not start it unless the core is done and all three agree.
 
 ### Rules from the participant guide (do not violate)
 - Use **at least two Gemini 4 models** (Argon, Carbon, Neon, Hydrogen), each with a clear job. Carbon is limited to approved cyber testers, so use Argon plus Hydrogen or Neon.
@@ -76,11 +77,13 @@ Lives in `contracts/run.schema.json`, with a hand-written example in `fixtures/s
 ```json
 {
   "run_id": "r_001",
+  "state": "processing | done | failed",
   "mode": "video | desk",
   "source": { "video_id": "abc", "duration_s": 94.0, "budget_usd": null },
   "items": [
     {
       "item_id": "i1",
+      "state": "processing | done | failed",
       "t_start": 12.4,
       "t_end": 15.0,
       "crop_path": "frames/r_001/i1.jpg",
@@ -140,7 +143,7 @@ seen-it/
 | **P2** | `backend/matching/`, `backend/shopify/catalog.py`, `eval/run_eval.py`, `eval/metrics.py` | catalog search wrapper, Decisions checker, status logic and thresholds, budget picker, evaluation runner and metrics. **Focus here: matching accuracy is the hardest part of the project.** |
 | **P3** | `web/`, `backend/shopify/cart.py`, `scripts/shopify_smoke.py`, demo | player with timed labels, card panel, confidence badges, **cart and checkout handoff**, preview slider, desk tab, recording |
 
-Why this split: P2's original load (search, checker, cart, eval) was too heavy, so cart and checkout moved to P3, and the baseline and stress stitching moved to P1. Ground-truth labeling is shared (see section 10). Ranking by difficulty is in section 15.
+Why this split: P2's original load (search, checker, cart, eval) was too heavy, so cart and checkout moved to P3, and the baseline and stress stitching moved to P1. Ground-truth labeling is shared (see section 10).
 
 `backend/api.py` is the only shared file. Keep it to thin endpoints that call each person's functions.
 
@@ -326,33 +329,15 @@ Cut "See it here" and desk mode from the 1-minute version unless they are rock s
 - [ ] Decisions API: multi-image input works (or fallback chosen)
 - [ ] `fixtures/sample_run.json` committed and the UI renders it
 - [ ] Each person has 6 eval videos with verified ground-truth links
-- [ ] Someone has read guide sections 5 and 7-9 (see section 16) and pasted the key rules into this file
+- [ ] Someone has read guide sections 5 and 7-9 (see section 15) and pasted the key rules into this file
 
 ---
 
-## 15. Difficulty ranking (hardest first)
-
-| # | Area | Owner | Why it's hard | Risk if it fails |
-|---|---|---|---|---|
-| 1 | **Finding the exact product** (text query to the right product among billions, then verifying it) | P2 | Retrieval recall is limited by what the catalog search returns. A good query is not enough if the product is not in the top 10. Calibrating confidence is subtle. | Everything downstream is wrong. This is the core claim. |
-| 2 | **Reliable item extraction from video** (right items, right timestamps, a usable crop) | P1 | Needs bounding boxes or good key frames, and must ignore walls, people and background clutter. Timestamps drift on fast cuts. | Bad crops mean bad queries and bad checks. |
-| 3 | **Ground truth and evaluation** | P2 (metrics), all (labeling) | Not technically hard, but slow: collecting 18 videos with verified product links is where the time goes. Easy to leak held-out data into tuning. | No credible chart, which the guide treats as a core requirement. |
-| 4 | **"See it here" preview with fidelity check** | P1 | Image editing changes colors and shapes unpredictably, and the Decisions check has to catch that. | Cuttable. Costs demo wow if it goes. |
-| 5 | **Relook recovery loop** | P1 (relook), P2 (trigger) | Depends on #1 and #2 already working. Needs a visible before/after. | Weakens the "where it breaks and how it recovers" story. |
-| 6 | **Shopify cart and checkout** | P3 | Low logic, high unknowns: agent profile acceptance, per-merchant endpoint discovery, rate limits, "coming soon" checkout tools. | Fallback exists: show the `continue_url`. |
-| 7 | **Frontend** (timed labels over a video, cards, badges, live updates) | P3 | Lots of work but well understood. Real-time updating while the backend runs is the fiddly part. | Looks rough, but can be polished late. |
-| 8 | **Desk mode** | P1 prompt, P2 budget, P3 tab | Mostly reuses the pipeline. Style is not measurable, so claim only what we can check (budget, preview fidelity). | Cut first. |
-| 9 | **Demo recording** | P3 | Easy technically, high stakes. Live runs on unseen inputs can fail on camera. | Mitigate with a rehearsed run plus saved fallbacks. |
-
-Load check: P2 has the single hardest area and should not be given anything else big. P1 has two of the top five but they are sequential (extract first, then relook, then preview), so the load is manageable if extraction is done by 1:00. P3 has the most surface area but the least risk, which is why they also own the demo.
-
----
-
-## 16. What this file still does not settle
+## 15. What this file still does not settle
 
 These are real gaps. Close them in the first 25 minutes.
 
-### 16a. Rules, submission and judging (from the participant guide)
+### 15a. Rules, submission and judging (from the participant guide)
 
 **Rules (violations mean disqualification):**
 - **Repo must be public.** Team size 1-4.
@@ -378,10 +363,10 @@ These are real gaps. Close them in the first 25 minutes.
 - **Gemini accounts are only given to people who are checked in,** in batches through the day. If one of us hasn't received it, email blerta@cerebralvalley.ai or ask on Discord.
 - Not yet read: **Schedule Overview** (submission deadline, judging start) and the **Shopify-provided resources** under section 6. Add the key times and links here.
 
-### 16b. Extraction output spec (P1)
+### 15b. Extraction output spec (P1)
 Argon should return JSON with one entry per **purchasable product** (not walls, people or generic background), each with: label, normalized attributes (color, material, category, style), the best timestamp, and a normalized bounding box on that frame. We crop the frame with ffmpeg using the box. Cap at about 10 items per video. Local files go through the Gemini Files API; check whether YouTube links work directly.
 
-### 16c. Ground-truth format (all)
+### 15c. Ground-truth format (all)
 `data/eval/<video_id>/labels.json`:
 ```json
 { "video_id": "v01", "split": "build | heldout", "source_url": "...",
@@ -389,16 +374,16 @@ Argon should return JSON with one entry per **purchasable product** (not walls, 
 ```
 Fill `upid` and `variant_id` using `shop catalog lookup` where it resolves. Keep the `split` field honest: **never tune on `heldout`.**
 
-### 16d. Latency and live updates (P1 + P3)
-A run takes a while. `POST /run` returns a `run_id` immediately, the backend writes `run.json` incrementally, and the UI polls `GET /run/<id>` about once per second so items appear as they finish. **This needs one addition to the contract: a top-level `state` field (`processing | done | failed`) and a per-item `state`.** Treat it as a contract change (all three approve). Cap parallel Gemini calls (about 5) with retries.
+### 15d. Latency and live updates (P1 + P3)
+A run takes a while. `POST /run` returns a `run_id` immediately, the backend writes `run.json` incrementally, and the UI polls `GET /run/<id>` about once per second so items appear as they finish. **The contract in section 5 now includes a top-level `state` field and a per-item `state` (`processing | done | failed`) for this.** This is a contract change: all three must approve it before anyone codes against run.json. Cap parallel Gemini calls (about 5) with retries.
 
-### 16e. Desk mode details (P1, P2)
+### 15e. Desk mode details (P1, P2)
 P1 returns "slots" (lamp, plant, desk mat, ...). P2 takes the top 3 candidates per slot, scores each on style fit and space fit via the Decisions API, then brute-forces the best-scoring combination under the budget with at most one item per slot. P3 shows the total.
 
-### 16f. Demo logistics (P3)
+### 15f. Demo logistics (P3)
 Run locally; no deployment needed. Decide now who drives the screen, which screen recorder, and which mic. Keep the last good run of each demo input saved as a fallback, and rehearse with a video nobody has seen.
 
-### 16g. Still unknown (verify, then record answers here)
+### 15g. Still unknown (verify, then record answers here)
 - Exact model IDs for the fast model and the image-edit model
 - Whether Argon accepts YouTube links
 - Whether the Decisions API accepts multiple images per input
