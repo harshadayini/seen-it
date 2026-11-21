@@ -1,6 +1,7 @@
 """Thin glue: endpoints call each person's functions. Keep it small."""
 import itertools
 import logging
+import time
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +15,24 @@ from backend.shopify import create_cart
 from backend.video import desk_items, extract
 from backend.video import preview as make_preview
 
+
+
+def _configure_logging() -> None:
+    """Make INFO lines from every seen_it.* logger show in the uvicorn terminal.
+
+    Uvicorn only configures its own loggers, so without this our INFO lines are dropped.
+    Idempotent: reuses the handler matching/logging_utils may already have attached.
+    """
+    root = logging.getLogger("seen_it")
+    root.setLevel(logging.INFO)
+    if not root.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+        root.addHandler(handler)
+    root.propagate = False
+
+
+_configure_logging()
 log = logging.getLogger("seen_it.api")
 app = FastAPI(title="Seen It")
 # The web app (Next.js dev server) runs on another port and loads crops from /frames.
@@ -81,15 +100,20 @@ def _process(run_id: str, req: RunRequest) -> None:
         if req.mode == "desk":
             found = desk_items(req.photo or "", req.request)
         else:
+            t0 = time.monotonic()
             found = extract(req.video or "", run_id)
+            log.info("stage=extract run=%s seconds=%.1f items=%d", run_id, time.monotonic() - t0, len(found))
         items = [{**i, "state": "processing"} for i in found]
         run["items"] = list(items)
         for n, item in enumerate(found):
+            t1 = time.monotonic()
             try:
-                items[n] = {**resolve(item), "state": "done"}
+                items[n] = {**resolve(item, video_path=req.video), "state": "done"}
             except Exception as e:  # noqa: BLE001  one bad item must not sink the run
                 log.warning("resolve failed for %s: %s", item.get("item_id"), type(e).__name__)
                 items[n] = {**item, "state": "failed"}
+            log.info("stage=resolve run=%s item=%s seconds=%.1f status=%s state=%s", run_id,
+                     item.get("item_id"), time.monotonic() - t1, items[n].get("status"), items[n].get("state"))
             run["items"] = list(items)
             run["totals"] = _totals(items, req.budget)
         run["state"] = "done"
