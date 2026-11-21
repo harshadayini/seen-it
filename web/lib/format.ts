@@ -59,3 +59,23 @@ export function humanize(id: string | null | undefined): string {
   const s = words.join(" ");
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+
+/**
+ * Parses a YouTube link (watch, youtu.be, shorts or embed) into its video id.
+ * @param src the source the user pasted (a link or a local path)
+ * @returns { id, vertical } or null when it is not a YouTube link. vertical is true for Shorts.
+ */
+export function youtubeId(src: string | null | undefined): { id: string; vertical: boolean } | null {
+  const m = (src ?? "").match(/^https?:\/\/(?:www\.|m\.)?(?:youtube\.com\/(shorts\/|watch\?(?:.*&)?v=|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i);
+  return m ? { id: m[2], vertical: (m[1] ?? "").toLowerCase() === "shorts/" } : null;
+}
+
+/** Plain-word match label: "Exact match", "Close match" or "No confident match" (never a score). */
+export function matchWords(s: MatchStatus | null | undefined): string {
+  return s === "exact" ? "Exact match" : s === "similar" ? "Close match" : "No confident match";
+}
+
+/** How many items have finished (done or failed) out of the total, for "Matching 4 of 10". */
+export function progressCounts(items: Item[]): { total: number; finished: number } {
+  return { total: items.length, finished: items.filter((i) => i.state !== "processing").length };
+}

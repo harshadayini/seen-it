@@ -26,6 +26,12 @@ interface Store {
   startRun: (video: string, mode?: "video" | "desk") => Promise<boolean>;
   starting: boolean;
   startError: string | null;
+  /** Epoch ms when the current run was started from this page (null after a reload). */
+  startedAt: number | null;
+  /** Epoch ms when that run was first seen finished (null while it is still processing). */
+  finishedAt: number | null;
+  /** Restart the whole run with the same video ("Try again"). Resolves true if it started. */
+  retryRun: () => Promise<boolean>;
   /** Items that have a purchasable match (exact or similar with a variant id). */
   purchasable: Item[];
   selectedIds: string[];
@@ -78,10 +84,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, [runId, error]);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
-  const [picked, setPicked] = useState<string[] | null>(null);
+  // Nothing is in the cart until the user adds it (null would mean "every match").
+  const [picked, setPicked] = useState<string[] | null>([]);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [finishedAt, setFinishedAt] = useState<number | null>(null);
   const [urls, setUrls] = useState<Record<string, string | null>>({});
   const [busy, setBusy] = useState(false);
   const [cartError, setCartError] = useState<string | null>(null);
+
+  // Stamp the moment a run we started finishes, so the elapsed time stops counting.
+  useEffect(() => {
+    if (startedAt != null && run && run.state !== "processing") setFinishedAt((f) => f ?? Date.now());
+  }, [run, startedAt]);
 
   const purchasable = useMemo(
     () =>
@@ -152,8 +166,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       });
       if (!res.ok) throw new Error(`Starting the run failed (${res.status})`);
       const data: Run = await res.json();
-      setPicked(null);
+      setPicked([]);
       setUrls({});
+      setStartedAt(Date.now());
+      setFinishedAt(null);
       setRunId(data.run_id);
       return true;
     } catch (e) {
@@ -163,6 +179,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       setStarting(false);
     }
   }, []);
+
+  /** Restarts the whole run with the same video. Side effect: POST /run. */
+  const retryRun = useCallback(() => startRun(run?.source.video_id ?? "", run?.mode ?? "video"), [startRun, run]);
 
   /** Asks the backend for one cart per merchant. Side effect: POST /cart. */
   const buildCarts = useCallback(async () => {
@@ -188,6 +207,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
   }, [run, lines]);
 
-  const value: Store = { run, error, idle, startRun, starting, startError, purchasable, selectedIds, toggle, setOnly, add, lines, byMerchant, total, urls, buildCarts, busy, cartError };
+  const value: Store = { run, error, idle, startRun, starting, startError, startedAt, finishedAt, retryRun, purchasable, selectedIds, toggle, setOnly, add, lines, byMerchant, total, urls, buildCarts, busy, cartError };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
