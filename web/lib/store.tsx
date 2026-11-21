@@ -6,7 +6,7 @@
  * Invariants: never fabricates a continue_url; with no backend it says so instead of faking carts.
  */
 "use client";
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { API_URL } from "./config";
 import { bestCandidate } from "./format";
 import type { Candidate, Item, Run } from "./types";
@@ -20,6 +20,8 @@ export interface CartLine {
 interface Store {
   run: Run | null;
   error: string | null;
+  /** True when a backend is connected but nothing has been scanned yet (no sample is shown). */
+  idle: boolean;
   /** Start a run on the backend for a video link; resolves true if it started. */
   startRun: (video: string, mode?: "video" | "desk") => Promise<boolean>;
   starting: boolean;
@@ -53,7 +55,27 @@ export function useStore(): Store {
 /** Provides run data and cart state to every screen. @param children app content */
 export function RunProvider({ children }: { children: React.ReactNode }) {
   const [runId, setRunId] = useState<string | null>(null);
-  const { run, error } = useRun(runId);
+  const { run, error, idle } = useRun(runId);
+
+  // Keep the current run across page reloads (the backend keeps runs in memory).
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem("scene-it-run");
+      if (saved) setRunId(saved);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      if (runId) sessionStorage.setItem("scene-it-run", runId);
+    } catch {}
+  }, [runId]);
+  // A saved run the backend no longer knows (it restarted): forget it and start fresh.
+  useEffect(() => {
+    if (runId && error?.includes("(404)")) {
+      try { sessionStorage.removeItem("scene-it-run"); } catch {}
+      setRunId(null);
+    }
+  }, [runId, error]);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [picked, setPicked] = useState<string[] | null>(null);
@@ -164,6 +186,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
   }, [run, lines]);
 
-  const value: Store = { run, error, startRun, starting, startError, purchasable, selectedIds, toggle, setOnly, add, lines, byMerchant, total, urls, buildCarts, busy, cartError };
+  const value: Store = { run, error, idle, startRun, starting, startError, purchasable, selectedIds, toggle, setOnly, add, lines, byMerchant, total, urls, buildCarts, busy, cartError };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

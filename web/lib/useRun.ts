@@ -18,11 +18,17 @@ import type { Run } from "./types";
 export function useRun(runId?: string | null) {
   const [run, setRun] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // With a backend connected, no run exists until the user scans something: no fake sample.
+  const idle = !!API_URL && !runId;
 
   useEffect(() => {
     let alive = true;
     let timer: ReturnType<typeof setTimeout>;
-    const url = API_URL && runId ? `${API_URL}/run/${runId}` : "/api/run";
+    if (idle) {
+      setRun(null);
+      return;
+    }
+    const url = API_URL ? `${API_URL}/run/${runId}` : "/api/run";
 
     async function tick() {
       try {
@@ -44,7 +50,7 @@ export function useRun(runId?: string | null) {
       alive = false;
       clearTimeout(timer);
     };
-  }, [runId]);
+  }, [runId, idle]);
 
-  return { run, error };
+  return { run, error, idle };
 }

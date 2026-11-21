@@ -11,6 +11,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CropImage, ProductImage } from "@/components/Asset";
 import { ConfidencePill } from "@/components/ConfidencePill";
+import { EmptyRun } from "@/components/EmptyRun";
 import { BackIcon, CheckIcon, PlusIcon } from "@/components/Icons";
 import { SceneFrame } from "@/components/SceneFrame";
 import { API_URL, CROP_POSITIONS } from "@/lib/config";
@@ -30,7 +31,7 @@ function Meter({ label, p }: { label: string; p?: number | null }) {
 
 /** @returns the Scene screen. */
 export default function ScenePage() {
-  const { run, error, selectedIds, toggle, lines, total } = useStore();
+  const { run, error, idle, selectedIds, toggle, lines, total } = useStore();
   const items = run?.items ?? [];
   const n = items.length;
   const [step, setStep] = useState(0);
@@ -41,6 +42,7 @@ export default function ScenePage() {
     if (followLatest.current && n > 0) setStep(n - 1);
   }, [n]);
 
+  if (idle) return <EmptyRun title="Nothing to walk through" />;
   if (error && !run) return <main id="main" className="screen"><p className="note">Couldn&apos;t load the run: {error}</p></main>;
   if (!run) return <main id="main" className="screen"><p className="note">Loading…</p></main>;
 

@@ -11,6 +11,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { CropImage, ProductImage } from "@/components/Asset";
 import { ConfidencePill } from "@/components/ConfidencePill";
+import { EmptyRun } from "@/components/EmptyRun";
 import { CheckIcon, PlusIcon } from "@/components/Icons";
 import { CROP_POSITIONS } from "@/lib/config";
 import { bestCandidate, fmtPrice, fmtRange, fmtTime, humanize, merchantName } from "@/lib/format";
@@ -18,7 +19,7 @@ import { useStore } from "@/lib/store";
 
 /** @returns the Results screen. */
 export default function ResultsPage() {
-  const { run, error, selectedIds, toggle, lines, total } = useStore();
+  const { run, error, idle, selectedIds, toggle, lines, total } = useStore();
   const [filter, setFilter] = useState("All");
 
   const categories = useMemo(() => {
@@ -26,6 +27,7 @@ export default function ResultsPage() {
     return ["All", ...set];
   }, [run]);
 
+  if (idle) return <EmptyRun />;
   if (error && !run) return <main id="main" className="screen"><p className="note">Couldn&apos;t load the run: {error}</p></main>;
   if (!run) return <main id="main" className="screen"><p className="note">Loading…</p></main>;
 
