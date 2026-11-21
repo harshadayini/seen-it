@@ -14,6 +14,7 @@ import { useState } from "react";
 import { EmptyRun } from "@/components/EmptyRun";
 import { ItemCard } from "@/components/ItemCard";
 import { ItemPanel } from "@/components/ItemPanel";
+import { SeeItHere } from "@/components/SeeItHere";
 import { RunProgress } from "@/components/RunProgress";
 import { VideoPane } from "@/components/VideoPane";
 import { bestCandidate, fmtPrice } from "@/lib/format";
@@ -48,6 +49,7 @@ export default function ResultsPage() {
   const { run, error, idle, selectedIds, toggle, lines, total, startedAt, finishedAt, retryRun } = useStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [seeItOpen, setSeeItOpen] = useState(false);
 
   if (idle) return <EmptyRun />;
   if (error && !run) {
@@ -115,6 +117,17 @@ export default function ResultsPage() {
           inCart={selectedIds.includes(selected.item_id) && !!bestCandidate(selected)}
           onToggleCart={() => toggle(selected.item_id)}
           onClose={() => setPanelOpen(false)}
+          onSeeIt={() => setSeeItOpen(true)}
+        />
+      )}
+
+      {seeItOpen && selected && selected.state === "done" && (
+        <SeeItHere
+          runId={run.run_id}
+          item={selected}
+          inCart={selectedIds.includes(selected.item_id)}
+          onToggleCart={() => toggle(selected.item_id)}
+          onClose={() => setSeeItOpen(false)}
         />
       )}
     </main>

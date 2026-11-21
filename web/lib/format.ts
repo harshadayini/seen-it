@@ -2,6 +2,7 @@
  * Small display helpers (time, money, percent, status labels, names).
  * Pure functions, no side effects, no network.
  */
+import { PREVIEW_CLOSE_FIDELITY, PREVIEW_PASS_FIDELITY } from "./config";
 import type { Item, MatchStatus } from "./types";
 
 /** Formats seconds as m:ss. @param s seconds @returns e.g. "1:04" */
@@ -78,4 +79,16 @@ export function matchWords(s: MatchStatus | null | undefined): string {
 /** How many items have finished (done or failed) out of the total, for "Matching 4 of 10". */
 export function progressCounts(items: Item[]): { total: number; finished: number } {
   return { total: items.length, finished: items.filter((i) => i.state !== "processing").length };
+}
+
+/**
+ * Plain-words verdict on a preview's fidelity check (never "failed" for a result that exists).
+ * @param f fidelity 0..1, or null/undefined when it was not checked
+ * @returns { tone, text } where tone picks the label style (exact = good, similar = close, none = doubtful or unchecked)
+ */
+export function checkWords(f: number | null | undefined): { tone: "exact" | "similar" | "none"; text: string } {
+  if (f == null) return { tone: "none", text: "Not checked" };
+  if (f >= PREVIEW_PASS_FIDELITY) return { tone: "exact", text: "Matches the product well" };
+  if (f >= PREVIEW_CLOSE_FIDELITY) return { tone: "similar", text: "Looks close: check the colour and shape" };
+  return { tone: "none", text: "Doesn't look right: try again" };
 }
