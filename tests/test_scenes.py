@@ -78,3 +78,16 @@ def test_video_upload_endpoint_rejects_junk_empty_and_oversize(tmp_path, monkeyp
     assert client.post("/upload", content=b"x" * 5000).status_code == 413
     left = list((tmp_path / "data" / "uploads").glob("*")) if (tmp_path / "data" / "uploads").exists() else []
     assert left == []  # no half-saved files
+
+
+@pytest.mark.skipif(shutil.which("sips") is None, reason="macOS sips not available")
+def test_iphone_heic_photo_is_converted_with_sips(tmp_path):
+    png = tmp_path / "p.png"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=1200x900:rate=1:duration=1", "-frames:v", "1", "-y", str(png)], check=True)
+    heic = tmp_path / "p.heic"
+    made = subprocess.run(["sips", "-s", "format", "heic", str(png), "--out", str(heic)], capture_output=True)
+    if made.returncode != 0 or not heic.exists():
+        pytest.skip("this sips cannot write HEIC")
+    out = scenes.save_scene(heic.read_bytes())
+    assert out["kind"] == "image" and len(out["frames"]) == 1
+    assert (tmp_path / out["frames"][0]).stat().st_size > 100
