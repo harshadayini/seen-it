@@ -59,3 +59,22 @@ def test_scene_endpoint_and_frame_lookup(tmp_path):
     sid = r.json()["scene_id"]
     assert scenes.scene_frame(sid, 0).endswith("f0.jpg")
     assert client.post("/scene", content=b"nope" * 50).status_code == 422
+
+
+@needs_ffmpeg
+def test_video_upload_endpoint_accepts_a_video_and_returns_a_usable_path(tmp_path):
+    mp4 = _make(tmp_path, ["-f", "lavfi", "-i", "testsrc=size=320x240:rate=10:duration=3", "-pix_fmt", "yuv420p"], "v.mp4")
+    r = client.post("/upload", content=mp4, headers={"content-type": "video/mp4"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["video"].endswith(".mp4") and body["duration_s"] >= 2.5 and body["bytes"] == len(mp4)
+    assert (tmp_path / "data" / "uploads").exists() and len(list((tmp_path / "data" / "uploads").glob("*"))) == 1  # raw temp removed
+
+
+def test_video_upload_endpoint_rejects_junk_empty_and_oversize(tmp_path, monkeypatch):
+    assert client.post("/upload", content=b"not a video" * 100).status_code == 422
+    assert client.post("/upload", content=b"").status_code == 422
+    monkeypatch.setattr(scenes, "MAX_VIDEO_BYTES", 1000)
+    assert client.post("/upload", content=b"x" * 5000).status_code == 413
+    left = list((tmp_path / "data" / "uploads").glob("*")) if (tmp_path / "data" / "uploads").exists() else []
+    assert left == []  # no half-saved files
