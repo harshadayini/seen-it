@@ -29,7 +29,7 @@ def test_good_first_try_saves_one_composite_and_keeps_score(scene, tmp_path):
 def test_low_score_regenerates_once_and_keeps_the_better(scene, tmp_path):
     results, scores = iter([b"LOW", b"BETTER"]), iter([0.4, 0.7])
     out = pv.make_preview(scene, "https://x/p.jpg", "r1", "i1", generate=lambda s, p: next(results),
-                          fetch=lambda u: b"product" * 30, check=lambda s, p, r: next(scores))
+                          fetch=lambda u: b"product" * 30, check=lambda s, p, r: next(scores), retry_if_low=True)
     assert out["regenerated"] is True and out["fidelity"] == 0.7
     assert (tmp_path / out["image_path"]).read_bytes() == b"BETTER"
 
@@ -37,7 +37,7 @@ def test_low_score_regenerates_once_and_keeps_the_better(scene, tmp_path):
 def test_second_attempt_worse_keeps_first(scene, tmp_path):
     results, scores = iter([b"FIRST", b"WORSE"]), iter([0.6, 0.2])
     out = pv.make_preview(scene, "https://x/p.jpg", "r1", "i1", generate=lambda s, p: next(results),
-                          fetch=lambda u: b"product" * 30, check=lambda s, p, r: next(scores))
+                          fetch=lambda u: b"product" * 30, check=lambda s, p, r: next(scores), retry_if_low=True)
     assert out["fidelity"] == 0.6 and (tmp_path / out["image_path"]).read_bytes() == b"FIRST"
 
 
@@ -68,3 +68,10 @@ def test_check_fidelity_is_none_when_it_cannot_run_or_answer_is_unusable():
     assert pv.check_fidelity(b"a", b"b", b"c", invoke=boom) is None
     bad = lambda input_blocks, questions, cfg: ({"answers": {"product_matches": {"noul": "high"}}}, 1.0)  # noqa: E731
     assert pv.check_fidelity(b"a", b"b", b"c", invoke=bad) is None
+
+
+def test_low_score_without_retry_flag_generates_once(scene):
+    calls = []
+    out = pv.make_preview(scene, "https://x/p.jpg", "r1", "i1", generate=lambda s, p: calls.append(1) or b"IMG",
+                          fetch=lambda u: b"product" * 30, check=lambda s, p, r: 0.3)
+    assert len(calls) == 1 and out["regenerated"] is False and out["fidelity"] == 0.3

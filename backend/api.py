@@ -72,6 +72,7 @@ class PreviewRequest(BaseModel):
     run_id: str
     item_id: str
     scene_image: str | None = None  # optional data URL (camera capture or upload); default is the item's video frame
+    retry_if_low: bool = False      # regenerate once if the fidelity is below the bar (doubles the time); eval uses it
 
 
 class CartRequest(BaseModel):
@@ -221,7 +222,7 @@ def _save_scene(data_url: str, run_id: str, item_id: str) -> str:
 def post_preview(req: PreviewRequest) -> dict:
     """Place the item's matched product into a scene (the camera capture if sent, else its video frame) and check it.
 
-    Takes 15-40 s (image model, then the Decisions check). Returns the preview with its measured fidelity, or null
+    Takes about 17 s (image model, then the Decisions check); about double with retry_if_low. Returns the preview with its measured fidelity, or null
     fidelity when the check could not run. A failure returns 502 with a clear message and never a fake image.
     """
     item = _get_item(_get_run(req.run_id), req.item_id)
@@ -232,7 +233,7 @@ def post_preview(req: PreviewRequest) -> dict:
     if not scene:
         raise HTTPException(422, f"item {req.item_id} has no scene image; send scene_image")
     try:
-        item["preview"] = make_preview(scene, best["image_url"], req.run_id, req.item_id)
+        item["preview"] = make_preview(scene, best["image_url"], req.run_id, req.item_id, retry_if_low=req.retry_if_low)
     except PreviewError as e:
         raise HTTPException(502, str(e)) from e
     return {"run_id": req.run_id, "item_id": req.item_id, "preview": item["preview"]}

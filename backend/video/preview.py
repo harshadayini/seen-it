@@ -139,12 +139,12 @@ def check_fidelity(scene: bytes, product: bytes, result: bytes, invoke: Callable
 
 def make_preview(scene_path: str, product_image_url: str, run_id: str, item_id: str,
                  generate: Callable | None = None, fetch: Callable | None = None,
-                 check: Callable | None = None) -> dict:
+                 check: Callable | None = None, retry_if_low: bool = False) -> dict:
     """Make and check a preview of a product in a scene.
 
     Args: scene_path: the user's scene image (path relative to the repo root, or absolute); product_image_url: the
     matched Shopify listing photo; run_id/item_id: name previews/<run_id>/<item_id>.jpg; generate, fetch, check:
-    injectable for tests. Returns {"image_path", "fidelity" (0-1 or None when unchecked), "regenerated"}.
+    injectable for tests; retry_if_low: regenerate once when the fidelity is below the bar. Returns {"image_path", "fidelity" (0-1 or None when unchecked), "regenerated"}.
     Side effects: up to two image-model calls and two Decisions calls; writes one jpg. Raises PreviewError.
     """
     generate, fetch, check = generate or _generate, fetch or _fetch_image, check or check_fidelity
@@ -159,7 +159,7 @@ def make_preview(scene_path: str, product_image_url: str, run_id: str, item_id: 
         score = check(scene, product, out)
         if not best_bytes or (score or 0) > (best_score or 0):
             best_bytes, best_score = out, score
-        if score is None or score >= config.PREVIEW_MIN_FIDELITY or attempt == 2:
+        if not retry_if_low or score is None or score >= config.PREVIEW_MIN_FIDELITY or attempt == 2:
             break
         regenerated = True  # below the bar on the first try: generate once more and keep the better
         log.info("preview %s fidelity %.2f below %.2f; regenerating", item_id, score, config.PREVIEW_MIN_FIDELITY)
