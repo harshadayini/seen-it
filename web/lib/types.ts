@@ -14,6 +14,8 @@ export interface Candidate {
   price?: number | null;
   currency?: string | null;
   image_url?: string | null;
+  /** The merchant's own product page (added by matching; optional). */
+  product_url?: string | null;
   p_same_product?: number | null;
   p_same_variant?: number | null;
 }

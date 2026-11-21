@@ -13,6 +13,7 @@ import { CropImage, ProductImage } from "@/components/Asset";
 import { ConfidencePill } from "@/components/ConfidencePill";
 import { EmptyRun } from "@/components/EmptyRun";
 import { CheckIcon, PlusIcon } from "@/components/Icons";
+import { StoreLink } from "@/components/StoreLink";
 import { CROP_POSITIONS } from "@/lib/config";
 import { bestCandidate, fmtPrice, fmtRange, fmtTime, humanize, merchantName } from "@/lib/format";
 import { useStore } from "@/lib/store";
@@ -106,6 +107,7 @@ export default function ResultsPage() {
                   </p>
                   {it.recovered && <span className="signal">Found on second look</span>}
                   <Link href={`/see-it?item=${it.item_id}`} className="link">See it here</Link>
+                  <StoreLink candidate={best} />
                 </>
               )}
               <p className="when num">{fmtRange(it.t_start, it.t_end)}</p>

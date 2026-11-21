@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { BackIcon } from "@/components/Icons";
+import { StoreLink } from "@/components/StoreLink";
 import { CompareSlider } from "@/components/CompareSlider";
 import { API_URL, PREVIEW_PASS_FIDELITY } from "@/lib/config";
 import { bestCandidate, fmtPrice, merchantName, score } from "@/lib/format";
@@ -54,6 +55,7 @@ function SeeIt() {
         <p className="sub">
           {merchantName(best.merchant_domain)} · <span className="num">{fmtPrice(best.price, best.currency)}</span>
         </p>
+        <StoreLink candidate={best} />
         <p className="sub num">
           {fidelity == null ? "No preview yet" : `Fidelity ${score(fidelity)} · ${fidelity >= PREVIEW_PASS_FIDELITY ? "check passed" : "check failed"}`}
         </p>

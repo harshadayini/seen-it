@@ -267,3 +267,9 @@ button { cursor: pointer; touch-action: manipulation; }
 
 .walk { align-self: flex-start; }
 .sframe.skeleton .sbox-tag { position: static; }
+
+/* Store links */
+.link.tight { min-height: 32px; font-size: 0.8rem; }
+.btn.wide-link { width: 100%; }
+.alt-link { font-size: 0.72rem; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; color: var(--olive); min-height: 32px; display: inline-flex; align-items: center; }
+.row-actions-inline { display: flex; gap: 12px; flex-wrap: wrap; }

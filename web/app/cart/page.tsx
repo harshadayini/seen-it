@@ -6,6 +6,7 @@
  */
 "use client";
 import { ProductImage } from "@/components/Asset";
+import { StoreLink } from "@/components/StoreLink";
 import { Spline3D } from "@/components/Spline3D";
 import { SPLINE_SCENES } from "@/lib/config";
 import { fmtPrice, merchantName } from "@/lib/format";
@@ -34,7 +35,7 @@ export default function CartPage() {
               {ls.map(({ item, candidate }) => (
                 <li key={item.item_id} className="line">
                   <ProductImage url={candidate.image_url} alt={candidate.title} category={String(item.attributes?.category ?? "")} className="thumb" />
-                  <span className="line-title">{candidate.title}</span>
+                  <span className="line-body"><span className="line-title">{candidate.title}</span><StoreLink candidate={candidate} className="link tight" /></span>
                   <span className="num">{fmtPrice(candidate.price, candidate.currency)}</span>
                 </li>
               ))}

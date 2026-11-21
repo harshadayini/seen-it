@@ -14,6 +14,7 @@ import { ConfidencePill } from "@/components/ConfidencePill";
 import { EmptyRun } from "@/components/EmptyRun";
 import { BackIcon, CheckIcon, PlusIcon } from "@/components/Icons";
 import { SceneFrame } from "@/components/SceneFrame";
+import { StoreLink } from "@/components/StoreLink";
 import { API_URL, CROP_POSITIONS } from "@/lib/config";
 import { bestCandidate, fmtPrice, fmtRange, merchantName, pct } from "@/lib/format";
 import { useStore } from "@/lib/store";
@@ -150,6 +151,7 @@ export default function ScenePage() {
                   {it.candidates!.filter((c) => c !== best).slice(0, 3).map((c, i) => (
                     <li key={`${c.variant_id ?? c.title}-${i}`}>
                       <ProductImage url={c.image_url} alt={c.title} category={category} className="alt-tile" />
+                      <StoreLink candidate={c} className="alt-link" label="Store ↗" />
                       <span className="alt-price num">{fmtPrice(c.price, c.currency)}</span>
                       <span className="alt-p num">{pct(c.p_same_product)}</span>
                     </li>
@@ -166,6 +168,7 @@ export default function ScenePage() {
                 <Link href={`/see-it?item=${it.item_id}`} className="btn outline">See it here</Link>
               </div>
             )}
+            {buyable && <StoreLink candidate={best} className="btn outline wide-link" label="View on the store ↗" />}
           </section>
 
           <div className="film" role="group" aria-label="All found objects">
