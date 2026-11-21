@@ -151,6 +151,10 @@ def _read_local_crop_bytes(crop_path: str | None, max_bytes: int) -> tuple[bytes
     if not crop_path:
         return None
     path = Path(crop_path)
+    if not path.is_file() and not path.is_absolute():
+        candidate_path = CONFIG.project_root / path
+        if candidate_path.is_file():
+            path = candidate_path
     if not path.is_file():
         return None
     raw = path.read_bytes()
