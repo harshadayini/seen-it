@@ -21,6 +21,7 @@ export function TopBar() {
           Seen It
         </Link>
         <nav aria-label="Main" className="topnav">
+          <Link href="/stress" className="navlink" aria-current={path === "/stress" ? "page" : undefined}>Stress test</Link>
           <Link href="/evidence" className="navlink" aria-current={path === "/evidence" ? "page" : undefined}>How good is it?</Link>
           <Link href="/cart" className="cartlink" aria-current={path === "/cart" ? "page" : undefined}>
             <BagIcon />
