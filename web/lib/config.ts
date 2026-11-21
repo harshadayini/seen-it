@@ -7,6 +7,17 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 /**
+ * Spline 3D scenes. Paste a published scene URL (ends in .splinecode) to switch a slot on.
+ * An empty string keeps the labelled placeholder, so the app works without any scene.
+ */
+export const SPLINE_SCENES = {
+  /** Floating object on the Scan screen. */
+  hero: "",
+  /** Object above the Cart. */
+  cart: "",
+} as const;
+
+/**
  * URL for a backend-written file such as an item crop (`frames/<run_id>/<item_id>.jpg`).
  * The backend serves these from /frames (and /previews). Without a backend it resolves to a
  * path that 404s, and the UI falls back to a placeholder.
@@ -26,9 +37,9 @@ export const PREVIEW_PASS_FIDELITY = 0.8;
  * the run contract has no bounding boxes yet, so boxes are laid out by item order.
  */
 export const BOX_SLOTS = [
-  { top: 42, left: 6, w: 24, h: 40 },
-  { top: 52, left: 44, w: 26, h: 30 },
-  { top: 22, left: 58, w: 20, h: 22 },
+  { top: 22, left: 8, w: 36, h: 70 },
+  { top: 60, left: 46, w: 30, h: 28 },
+  { top: 50, left: 80, w: 16, h: 17 },
   { top: 64, left: 14, w: 26, h: 18 },
 ] as const;
 

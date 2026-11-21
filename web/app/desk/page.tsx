@@ -1,14 +1,15 @@
 /**
- * Screen 5, Desk mode: a photo card of an empty desk, a request field, the budget line, and a
- * list of picks with style-fit and space-fit scores.
+ * Screen 5, Desk: a photo of an empty desk, one request field, a budget line, and a short list
+ * of picks with style and space scores.
  * Boundary: LAYOUT SHELL. The run contract has no desk data yet, so the picks and scores are
- * sample values from lib/config.ts, labelled "Sample layout" on screen. They are not real
- * matches and "Add all" stays disabled until the backend supplies real ones.
+ * sample values from lib/config.ts and are labelled "Sample" on screen. They are not real
+ * matches, and "Add all" stays disabled until the backend supplies real ones.
  */
 "use client";
 import Link from "next/link";
 import { useState } from "react";
 import { Asset, ProductImage } from "@/components/Asset";
+import { BackIcon } from "@/components/Icons";
 import { DESK_SAMPLE } from "@/lib/config";
 import { fmtPrice, score } from "@/lib/format";
 
@@ -18,40 +19,39 @@ export default function DeskPage() {
   const spent = DESK_SAMPLE.picks.reduce((a, p) => a + p.price, 0);
 
   return (
-    <main className="screen desk">
-      <header className="topbar plain">
-        <Link href="/" className="back">Scan</Link>
-        <span className="pill sample">Sample layout</span>
-      </header>
+    <main id="main" className="screen">
+      <div className="between">
+        <Link href="/" className="back"><BackIcon /> Scan</Link>
+        <span className="tagline">Sample</span>
+      </div>
 
-      <section className="card photo short">
+      <div className="photo">
         <Asset name="deskEmpty" className="fill" />
-        <Asset name="stickerPlant" className="sticker" decorative />
-      </section>
+      </div>
 
-      <section className="card info">
+      <section className="detail">
         <label className="field">
           <span className="sr-only">What should change?</span>
           <input value={request} onChange={(e) => setRequest(e.target.value)} />
         </label>
-        <p className="mono budget">
-          {DESK_SAMPLE.picks.length} picks, {fmtPrice(spent)} of {fmtPrice(DESK_SAMPLE.budget)}
-        </p>
-        <ul className="picks">
+        <h1 className="h1">
+          {DESK_SAMPLE.picks.length} picks, <span className="num">{fmtPrice(spent)}</span> of <span className="num">{fmtPrice(DESK_SAMPLE.budget)}</span>
+        </h1>
+        <ul className="lines">
           {DESK_SAMPLE.picks.map((p) => (
-            <li key={p.name} className="pick">
-              <ProductImage alt={p.name} category={p.category} className="line-thumb" />
-              <div className="pick-body">
+            <li key={p.name} className="line">
+              <ProductImage alt={p.name} category={p.category} className="thumb" />
+              <div className="line-body">
                 <span className="line-title">{p.name}</span>
-                <span className="mono dim">style {score(p.style)} · space {score(p.space)}</span>
+                <span className="sub num">Style {score(p.style)} · Space {score(p.space)}</span>
               </div>
-              <span className="mono">{fmtPrice(p.price)}</span>
+              <span className="num">{fmtPrice(p.price)}</span>
             </li>
           ))}
         </ul>
-        <div className="row actions">
-          <Link href="/see-it" className="btn outline">See it here</Link>
-          <button type="button" className="btn filled" disabled>Add all</button>
+        <div className="row">
+          <Link href="/see-it" className="btn outline grow">See it here</Link>
+          <button type="button" className="btn primary grow" disabled>Add all</button>
         </div>
       </section>
     </main>

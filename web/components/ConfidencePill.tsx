@@ -1,6 +1,7 @@
 /**
- * ConfidencePill: Exact (filled maroon), Similar (outlined), No match (dashed), plus the score.
- * Boundary: presentational. "No match" is shown honestly, never styled as a result.
+ * ConfidencePill: Exact (filled ink), Similar (outlined), No match (dashed), with the score.
+ * Boundary: presentational. Status is always carried by words, never colour alone, and "No
+ * match" is shown honestly rather than styled as a result.
  */
 import type { MatchStatus } from "@/lib/types";
 import { score, statusLabel } from "@/lib/format";
@@ -11,7 +12,7 @@ export function ConfidencePill({ status, p }: { status?: MatchStatus | null; p?:
   return (
     <span className={`pill ${cls}`}>
       {statusLabel(status)}
-      {status && status !== "none" && p != null && <span className="mono"> {score(p)}</span>}
+      {status && status !== "none" && p != null && <span className="num"> {score(p)}</span>}
     </span>
   );
 }

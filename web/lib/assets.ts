@@ -3,7 +3,7 @@
  * Drop files into web/public/assets/ with these exact names and they replace the labelled
  * placeholder tiles automatically. Nothing else in the app hardcodes an asset path.
  * Boundary: decorative / demo imagery only. Real product results always render the merchant's
- * own image_url (never re-hosted); these product files are only stand-ins when that URL fails.
+ * own image_url (never re-hosted); the product files are only stand-ins when that URL fails.
  */
 
 export interface AssetSpec {
@@ -16,17 +16,16 @@ export interface AssetSpec {
 }
 
 export const ASSETS = {
-  scanRoom: { file: "scan-room.jpg", alt: "Warm living room with a floor lamp, vase, rug and chair", size: "1170x1900" },
-  deskEmpty: { file: "desk-empty.jpg", alt: "Empty wooden desk by a window", size: "1600x1200" },
-  roomBefore: { file: "room-before.jpg", alt: "Room corner before adding the product", size: "1600x1200" },
-  roomAfter: { file: "room-after.jpg", alt: "The same room corner with the product placed", size: "1600x1200" },
-  productFloorLamp: { file: "product-floor-lamp.png", alt: "Black arc floor lamp", size: "800x800" },
-  productVase: { file: "product-vase.png", alt: "Speckled ceramic vase", size: "800x800" },
-  productRug: { file: "product-rug.png", alt: "Textured rug", size: "800x800" },
-  productDeskLamp: { file: "product-desk-lamp.png", alt: "Brass desk lamp", size: "800x800" },
-  productChair: { file: "product-chair.png", alt: "Cream boucle accent chair", size: "800x800" },
-  stickerCamera: { file: "sticker-camera.png", alt: "", size: "400x400" },
-  stickerPlant: { file: "sticker-plant.png", alt: "", size: "400x400" },
+  scanRoom: { file: "scan-room.svg", alt: "Calm living room with a floor lamp, vase, rug and chair", size: "1170x1460" },
+  deskEmpty: { file: "desk-empty.svg", alt: "Empty wooden desk by a window", size: "1600x1200" },
+  roomBefore: { file: "room-before.svg", alt: "Room corner before adding the product", size: "1600x2000" },
+  roomAfter: { file: "room-after.svg", alt: "The same room corner with the product placed", size: "1600x2000" },
+  productFloorLamp: { file: "product-floor-lamp.svg", alt: "Black arc floor lamp", size: "800x800" },
+  productVase: { file: "product-vase.svg", alt: "Speckled ceramic vase", size: "800x800" },
+  productRug: { file: "product-rug.svg", alt: "Textured rug", size: "800x800" },
+  productDeskLamp: { file: "product-desk-lamp.svg", alt: "Brass desk lamp", size: "800x800" },
+  productChair: { file: "product-chair.svg", alt: "Cream boucle accent chair", size: "800x800" },
+  heroObject: { file: "hero-object.svg", alt: "", size: "600x600" },
 } as const satisfies Record<string, AssetSpec>;
 
 export type AssetKey = keyof typeof ASSETS;

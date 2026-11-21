@@ -9,6 +9,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@splinetool/runtime": "^2.0.211",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
