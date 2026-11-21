@@ -73,8 +73,8 @@ export default function StressPage() {
   const [link, setLink] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [harder, setHarder] = useState(false);
-  const severity = harder ? "extreme" : "standard";
+  // One level only: the harsh setting, since it is the one that shows where the models start to slip.
+  const severity = "extreme";
 
   const lastSource = lastRun?.source.video_id ?? null;
   const processing = run?.state === "processing";
@@ -112,10 +112,6 @@ export default function StressPage() {
               <span className="sr-only">Video link</span>
               <input type="text" autoComplete="off" placeholder="Paste a video link or file path" value={link} onChange={(e) => setLink(e.target.value)} onKeyDown={(e) => e.key === "Enter" && start(link, severity)} />
             </label>
-            <div className="segmented" role="group" aria-label="How hard to push">
-              <button type="button" className={`seg-btn ${!harder ? "on" : ""}`} aria-pressed={!harder} onClick={() => setHarder(false)}>Standard</button>
-              <button type="button" className={`seg-btn ${harder ? "on" : ""}`} aria-pressed={harder} onClick={() => setHarder(true)}>Push harder</button>
-            </div>
             <div className="row">
               <button type="button" className="btn primary grow" disabled={starting || processing} onClick={() => start(link, severity)}>{starting ? "Starting…" : processing ? "Testing…" : "Run stress test"}</button>
               {lastSource && <button type="button" className="btn outline" disabled={starting || processing} onClick={() => start(lastSource, severity)}>Use my last video</button>}
@@ -148,7 +144,7 @@ export default function StressPage() {
           {run?.state === "done" && run.summary && run.baseline && (
             <>
               <section className="summary" aria-label="Summary">
-                <h2 className="grp-h">The short version{run.severity === "extreme" ? " · pushed harder" : ""}</h2>
+                <h2 className="grp-h">The short version</h2>
                 <div className="stats">
                   <div><b className="num">{run.summary.baseline_items}</b><span>items in the clean clip</span></div>
                   <div><b className="num">{pct(run.summary.avg_degraded)}</b><span>still found on average when damaged</span></div>
