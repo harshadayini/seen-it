@@ -19,10 +19,12 @@ const TABS = [
 export function TabBar() {
   const path = usePathname();
   const { lines } = useStore();
+  // Only the landing page uses the bottom tab bar; every other page uses the top bar.
+  if (path !== "/") return null;
   return (
     <nav className="tabbar" aria-label="Main">
       {TABS.map(({ href, label, Icon }) => {
-        const active = href === "/" ? path === "/" || path === "/desk" : path.startsWith(href) || (href === "/results" && (path === "/see-it" || path === "/scene"));
+        const active = href === "/"; // this bar only appears on the landing page
         return (
           <Link key={href} href={href} className={`tab ${active ? "on" : ""}`} aria-current={active ? "page" : undefined}>
             <Icon />

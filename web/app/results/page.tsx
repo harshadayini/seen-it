@@ -1,146 +1,122 @@
 /**
- * Screen 2, Results: a ghost-word header, category filters, then one card per found item.
- * Each card reads left to right: what was in YOUR video, then the closest product on Shopify,
- * then a few more similar products, each clearly labelled with price, store and a plain-word
- * confidence. "No match" is shown honestly. A sticky bar adds the selected items to the cart.
- * Boundary: reads the shared store only; crops fall back to placeholders until supplied.
+ * Screen 2, Results: your video on the left, the items found on the right (stacked on a phone).
+ * While the run is processing it shows real progress ("Found 10 items. Matching 4 of 10.") and
+ * each item turns into a card the moment its own state is "done". Every state has a screen:
+ * nothing scanned, cannot reach the server, run failed, no items found.
+ * Items are grouped by verdict; clicking one opens a slide-over with the details. A footer bar
+ * shows what is in the cart and leads to it.
+ * Boundary: reads the shared store only; "Try again" restarts the whole run with the same video
+ * (no per-item backend endpoint exists).
  */
 "use client";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { CropImage, ProductImage } from "@/components/Asset";
-import { ConfidencePill } from "@/components/ConfidencePill";
+import { useState } from "react";
 import { EmptyRun } from "@/components/EmptyRun";
-import { CheckIcon, PlusIcon } from "@/components/Icons";
-import { StoreLink } from "@/components/StoreLink";
-import { CROP_POSITIONS } from "@/lib/config";
-import { bestCandidate, cleanTitle, fmtPrice, fmtRange, fmtTime, humanize, merchantName, pct } from "@/lib/format";
+import { ItemCard } from "@/components/ItemCard";
+import { ItemPanel } from "@/components/ItemPanel";
+import { RunProgress } from "@/components/RunProgress";
+import { VideoPane } from "@/components/VideoPane";
+import { bestCandidate, fmtPrice } from "@/lib/format";
 import { useStore } from "@/lib/store";
+import type { Item } from "@/lib/types";
+
+/** Groups items so the list reads top to bottom: still checking, then exact, close, none, failed. */
+function groupItems(items: Item[]) {
+  const failed = (i: Item) => i.state === "failed" || (i.state === "done" && !i.status);
+  return [
+    { key: "checking", title: "Checking", items: items.filter((i) => i.state === "processing") },
+    { key: "exact", title: "Exact matches", items: items.filter((i) => i.state === "done" && i.status === "exact") },
+    { key: "similar", title: "Close matches", items: items.filter((i) => i.state === "done" && i.status === "similar") },
+    { key: "none", title: "No confident match", items: items.filter((i) => i.state === "done" && i.status === "none") },
+    { key: "failed", title: "Couldn't check", items: items.filter(failed) },
+  ].filter((g) => g.items.length > 0);
+}
+
+/** Full-screen message with one retry action. @param title headline @param body one plain sentence */
+function Problem({ title, body, action, onAction }: { title: string; body: string; action: string; onAction: () => void }) {
+  return (
+    <main id="main" className="screen results">
+      <header className="head"><h1 className="h1">{title}</h1><p className="meta">{body}</p></header>
+      <button type="button" className="btn primary" onClick={onAction}>{action}</button>
+      <Link href="/" className="link">Use a different video</Link>
+    </main>
+  );
+}
 
 /** @returns the Results screen. */
 export default function ResultsPage() {
-  const { run, error, idle, selectedIds, toggle, lines, total } = useStore();
-  const [filter, setFilter] = useState("All");
-
-  const categories = useMemo(() => {
-    const set = new Set((run?.items ?? []).map((i) => String(i.attributes?.category ?? "")).filter(Boolean));
-    return ["All", ...set];
-  }, [run]);
+  const { run, error, idle, selectedIds, toggle, lines, total, startedAt, finishedAt, retryRun } = useStore();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   if (idle) return <EmptyRun />;
-  if (error && !run) return <main id="main" className="screen"><p className="note">Couldn&apos;t load the run: {error}</p></main>;
-  if (!run) return <main id="main" className="screen"><p className="note">Loading…</p></main>;
+  if (error && !run) {
+    return <Problem title="Can't reach the app right now" body="We'll keep trying. You can also try again yourself." action="Try again" onAction={() => window.location.reload()} />;
+  }
+  if (!run) return <main id="main" className="screen results"><p className="note" role="status">Loading…</p></main>;
+  if (run.state === "failed") {
+    return <Problem title="We couldn't finish watching this video" body="Nothing was added to your cart." action="Try again" onAction={() => void retryRun()} />;
+  }
+  if (run.state === "done" && run.items.length === 0) {
+    return <Problem title="We didn't find any products in this video" body="Try a video where the products are clearly in view." action="Try again" onAction={() => void retryRun()} />;
+  }
 
-  const items = run.items.filter((i) => filter === "All" || String(i.attributes?.category) === filter);
+  const selected = run.items.find((i) => i.item_id === selectedId) ?? null;
+  const firstDone = run.items.find((i) => i.state === "done" && i.crop_path) ?? null;
 
   return (
-    <main id="main" className="screen">
+    <main id="main" className="screen results">
       <header className="head">
-        <span className="ghost" aria-hidden="true">found</span>
-        <h1 className="h1 over">{humanize(run.source.video_id)}</h1>
-        <p className="meta num over">
-          {run.items.length} items{run.source.duration_s != null ? ` · ${fmtTime(run.source.duration_s)}` : ""}
-          {run.state === "processing" ? " · still looking" : ""}
-        </p>
+        <h1 className="h1">What we found</h1>
       </header>
+      <RunProgress run={run} startedAt={startedAt} finishedAt={finishedAt} />
 
-      <Link href="/scene" className="btn outline small walk">Walk through the scene</Link>
-
-      {categories.length > 2 && (
-        <div className="chips" role="group" aria-label="Filter by category">
-          {categories.map((c) => (
-            <button key={c} type="button" className={`chip ${filter === c ? "on" : ""}`} aria-pressed={filter === c} onClick={() => setFilter(c)}>
-              {c}
-            </button>
+      <div className="results-grid">
+        <VideoPane source={run.source.video_id} item={selected} fallback={firstDone} />
+        <div className="groups">
+          {groupItems(run.items).map((g) => (
+            <section key={g.key} aria-labelledby={`g-${g.key}`}>
+              <h2 id={`g-${g.key}`} className="grp-h">{g.title} <span className="num">{g.items.length}</span></h2>
+              <ul className="items">
+                {g.items.map((it) => (
+                  <ItemCard
+                    key={it.item_id}
+                    item={it}
+                    selected={it.item_id === selectedId}
+                    inCart={selectedIds.includes(it.item_id)}
+                    onSelect={() => { setSelectedId(it.item_id); setPanelOpen(true); }}
+                    onToggleCart={() => toggle(it.item_id)}
+                    onRetry={() => void retryRun()}
+                  />
+                ))}
+              </ul>
+            </section>
           ))}
         </div>
-      )}
+      </div>
 
-      <ul className="rlist">
-        {items.map((it, i) => {
-          const best = bestCandidate(it);
-          const none = it.status === "none";
-          const looking = !it.status;
-          const buyable = !none && !looking && !!best?.variant_id;
-          const inCart = selectedIds.includes(it.item_id);
-          const category = String(it.attributes?.category ?? "");
-          const others = (it.candidates ?? []).filter((c) => c !== best).slice(0, 3);
-          return (
-            <li key={it.item_id} className="rcard">
-              <div className="rcard-head">
-                <span className="idx num">{run.items.indexOf(it) + 1}</span>
-                <h2 className="rcard-title">{it.description ?? "Item"}</h2>
-                <span className="when num">{fmtRange(it.t_start, it.t_end)}</span>
-              </div>
-
-              <div className="duo">
-                <figure className="duo-col">
-                  <figcaption>In your video</figcaption>
-                  <div className="tile"><CropImage path={it.crop_path} className="fillcrop" position={CROP_POSITIONS[i % CROP_POSITIONS.length]} /></div>
-                </figure>
-                <span className="duo-arrow" aria-hidden="true">→</span>
-                <figure className="duo-col">
-                  <figcaption>{none ? "On Shopify" : "Closest on Shopify"}</figcaption>
-                  {none || looking ? (
-                    <div className="tile empty"><span className="tile-note">{looking ? "Searching…" : "No match"}</span></div>
-                  ) : (
-                    <ProductImage url={best?.image_url} alt={best?.title ?? ""} category={category} />
-                  )}
-                </figure>
-              </div>
-
-              <div className="rcard-body">
-                <div className="row">
-                  <ConfidencePill status={it.status} p={best?.p_same_product} />
-                  {it.recovered && <span className="signal">Found on second look</span>}
-                </div>
-                {none ? (
-                  <p className="sub">Nothing on Shopify was trusted enough to show.</p>
-                ) : looking ? (
-                  <p className="sub">Searching the catalog…</p>
-                ) : (
-                  <>
-                    <h3 className="card-title" title={best?.title}>{cleanTitle(best?.title)}</h3>
-                    <p className="sub">{merchantName(best?.merchant_domain)} · <span className="num price">{fmtPrice(best?.price, best?.currency)}</span></p>
-                  </>
-                )}
-                <div className="row-actions-inline">
-                  {buyable && (
-                    <button type="button" className={`btn small ${inCart ? "primary" : "outline"}`} aria-pressed={inCart} onClick={() => toggle(it.item_id)}>
-                      {inCart ? <><CheckIcon /> In cart</> : <><PlusIcon /> Add to cart</>}
-                    </button>
-                  )}
-                  {buyable && <Link href={`/see-it?item=${it.item_id}`} className="link">See it here</Link>}
-                  {buyable && <StoreLink candidate={best} />}
-                </div>
-              </div>
-
-              {others.length > 0 && (
-                <div className="more">
-                  <p className="sec-title">More from Shopify</p>
-                  <ul>
-                    {others.map((c, k) => (
-                      <li key={`${c.variant_id ?? c.title}-${k}`}>
-                        <ProductImage url={c.image_url} alt={c.title} category={category} className="more-tile" />
-                        <span className="more-name" title={c.title}>{cleanTitle(c.title, 26)}</span>
-                        <span className="num more-price">{fmtPrice(c.price, c.currency)} · {pct(c.p_same_product)}</span>
-                        <StoreLink candidate={c} className="alt-link" label="Store ↗" />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-
-      <div className="stickybar">
-        <Link href="/cart" className={`btn primary wide ${lines.length === 0 ? "disabled" : ""}`} aria-disabled={lines.length === 0}>
-          <span>Add {lines.length} to cart</span>
-          <span className="num">{fmtPrice(total)}</span>
+      <div className="cartbar">
+        <p className="cartbar-text" role="status">
+          {lines.length === 0 ? "Nothing in your cart yet" : <>{lines.length} {lines.length === 1 ? "item" : "items"} in your cart · <span className="num">{fmtPrice(total)}</span></>}
+        </p>
+        <Link
+          href="/cart"
+          className={`btn primary ${lines.length === 0 ? "disabled" : ""}`}
+          aria-disabled={lines.length === 0}
+          tabIndex={lines.length === 0 ? -1 : undefined}
+        >
+          Review cart
         </Link>
       </div>
+
+      {panelOpen && selected && selected.state === "done" && (
+        <ItemPanel
+          item={selected}
+          inCart={selectedIds.includes(selected.item_id) && !!bestCandidate(selected)}
+          onToggleCart={() => toggle(selected.item_id)}
+          onClose={() => setPanelOpen(false)}
+        />
+      )}
     </main>
   );
 }

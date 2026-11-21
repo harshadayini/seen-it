@@ -32,14 +32,14 @@ export default function ScanPage() {
   /** Uploads a dropped or chosen file, then follows the new run. */
   async function onFile(file: File) {
     setFileName(file.name);
-    if (await uploadAndRun(file)) router.push("/scene");
+    if (await uploadAndRun(file)) router.push("/results");
   }
 
   /** Starts a real run for the pasted link, then shows results as they arrive. */
   async function start() {
     const started = await startRun(link, "video");
     // With a backend, follow the new run; without one, show the labelled sample scene.
-    if (started || !API_URL) router.push("/scene");
+    if (started || !API_URL) router.push("/results");
   }
 
   return (
