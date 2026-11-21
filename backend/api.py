@@ -108,7 +108,7 @@ def _process(run_id: str, req: RunRequest) -> None:
         for n, item in enumerate(found):
             t1 = time.monotonic()
             try:
-                items[n] = {**resolve(item, video_path=req.video), "state": "done"}
+                items[n] = resolve(item, video_path=req.video)  # keeps its own state: "done" or "failed"
             except Exception as e:  # noqa: BLE001  one bad item must not sink the run
                 log.warning("resolve failed for %s: %s", item.get("item_id"), type(e).__name__)
                 items[n] = {**item, "state": "failed"}
