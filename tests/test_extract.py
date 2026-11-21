@@ -74,7 +74,7 @@ def test_saved_response_two_pass_crops_and_full_frame_fallback(tmp_path, monkeyp
         calls.append([i for i, _ in group])
         return {group[0][0]: [0.25, 0.25, 0.75, 0.75]}  # only the first item of each frame gets a box
 
-    items = ex.items_from_response(saved["raw_text"], video, "r_test", locate=fake_locate)
+    items = ex.items_from_response(saved["raw_text"], video, "r_test", locate=fake_locate, refine=lambda e: {"i1": "led monitor light bar black"})
     assert len(items) == len(saved["items"]) == 10
     assert sum(len(c) for c in calls) == 10 and len(calls) <= 3  # items grouped by shared timestamp
     item_schema = {"$ref": "#/$defs/item", "$defs": SCHEMA["$defs"]}
@@ -88,6 +88,8 @@ def test_saved_response_two_pass_crops_and_full_frame_fallback(tmp_path, monkeyp
         # boxed items are cropped (about 60% of the frame after padding); the rest keep the full 640x360 frame
         assert (w, h) != (640, 360) if it["item_id"] in boxed else (w, h) == (640, 360)
     assert not list((tmp_path / "frames" / "r_test").glob("_frame_*"))  # temp frames cleaned up
+    assert items[0]["query"] == "led monitor light bar black"  # refined query used
+    assert items[1]["query"] == ex.build_query(saved["items"][1]["label"], saved["items"][1]["attributes"])  # rule-based fallback
 
 
 @needs_ffmpeg
@@ -95,5 +97,13 @@ def test_failed_box_call_keeps_items(tmp_path, monkeypatch):
     video = _video(tmp_path)
     monkeypatch.setattr(config, "ROOT", tmp_path)
     saved = json.loads(SAVED.read_text())
-    items = ex.items_from_response(saved["raw_text"], video, "r_fail", locate=lambda f, g: {})
+    items = ex.items_from_response(saved["raw_text"], video, "r_fail", locate=lambda f, g: {}, refine=lambda e: {})
     assert len(items) == 10 and all((tmp_path / i["crop_path"]).stat().st_size > 0 for i in items)
+
+
+def test_parse_queries_keeps_only_usable():
+    text = json.dumps([{"id": "i1", "query": "  black   monitor light bar "}, {"id": "i2", "query": ""},
+                       {"id": "i3", "query": "x" * 101}, {"id": "i4"}, {"query": "no id"}])
+    assert ex.parse_queries(text) == {"i1": "black monitor light bar"}
+    with pytest.raises(ex.ExtractError):
+        ex.parse_queries("nope")

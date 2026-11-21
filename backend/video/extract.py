@@ -1,6 +1,6 @@
 """P1: find purchasable items in a video with Gemini 4 Argon, then crop each one.
 
-Does, in two passes: (1) send the VIDEO to Argon for labels, attributes and a best timestamp
+Does, in two passes (plus a Gemini 4 Hydrogen query writer that runs alongside pass 2): (1) send the VIDEO to Argon for labels, attributes and a best timestamp
 per item (its video boxes are rough, so they are not used); (2) cut a still frame at each
 timestamp with ffmpeg and ask Argon for tight boxes on that STILL (0-1000 scale, accurate),
 crop to the box, save frames/<run_id>/<item_id>.jpg and return Items shaped like
@@ -37,6 +37,13 @@ or generic background. At most 10 items. Return ONLY a JSON array; each entry:
 BOX_PROMPT = """This is one still image. For each product below, return a tight bounding box
 around it. Return ONLY a JSON array of {"id": str, "bbox": [ymin, xmin, ymax, xmax]} with
 integer coordinates normalized 0-1000. Leave out any product that is not clearly visible.
+Products:
+"""
+QUERY_PROMPT = """You write product search queries for a shopping catalog. For each product below
+(seen in a video, so the description may be rough), write ONE query of 3 to 7 words: the product
+type first, then the attributes that most narrow it (color, material, form). Do not guess a brand,
+and do not use vague style words like "modern" or "sleek". Return ONLY a JSON array of
+{"id": str, "query": str}.
 Products:
 """
 BOX_WORKERS = 5  # parallel still-frame calls (AGENT_RULES: cap about 5)
@@ -182,16 +189,69 @@ def _locate_boxes(frame: Path, group: list[tuple[str, str]]) -> dict[str, list[f
         return {}
 
 
-def items_from_response(text: str, video: Path, run_id: str, locate=None) -> list[Item]:
+def parse_queries(text: str) -> dict[str, str]:
+    """Parse the query-writer response into {item_id: query}, keeping only usable queries.
+
+    Args: text: JSON array of {"id", "query"}. Returns: queries of 1-100 characters; anything else
+    is dropped. Raises ExtractError if the text is not a JSON array.
+    """
+    try:
+        data = json.loads(re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.M).strip())
+    except json.JSONDecodeError as e:
+        raise ExtractError(f"query response is not valid JSON: {e}") from e
+    if not isinstance(data, list):
+        raise ExtractError("query response is not a JSON array")
+    out: dict[str, str] = {}
+    for e in data:
+        q = e.get("query") if isinstance(e, dict) else None
+        if isinstance(e, dict) and isinstance(e.get("id"), str) and isinstance(q, str) and 1 <= len(q.strip()) <= 100:
+            out[e["id"]] = " ".join(q.split())
+    return out
+
+
+def _refine_queries(entries: list[dict]) -> dict[str, str]:
+    """Ask Gemini 4 Hydrogen (the fast model) to write a sharper catalog query for every item in one call.
+
+    Args: entries: dicts with item_id, label and attributes. Returns: {item_id: query} for the items it
+    answered; {} on any failure, so the caller keeps the rule-based query. Side effects: one Hydrogen
+    call, logged at INFO. Sends text only (no sampling params, per AGENT_RULES).
+    """
+    from google import genai
+    from google.genai import types
+
+    if not entries or not config.GEMINI_FAST_MODEL:
+        return {}
+    lines = "\n".join(f'{e["item_id"]}: {e["label"]} ({json.dumps(e["attributes"])})' for e in entries)
+    try:
+        client = genai.Client(api_key=config.GEMINI_API_KEY)
+        t0 = time.monotonic()
+        resp = client.models.generate_content(
+            model=config.GEMINI_FAST_MODEL,
+            contents=QUERY_PROMPT + lines,
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+        )
+        queries = parse_queries(resp.text or "")
+        log.info("hydrogen query call model=%s items=%d answered=%d seconds=%.1f",
+                 config.GEMINI_FAST_MODEL, len(entries), len(queries), time.monotonic() - t0)
+        return queries
+    except Exception as e:  # noqa: BLE001  a failed query call must not lose items
+        log.warning("hydrogen query call failed (%s); using rule-based queries",
+                    _scrub(f"{type(e).__name__}: {str(e)[:200]}"))
+        return {}
+
+
+def items_from_response(text: str, video: Path, run_id: str, locate=None, refine=None) -> list[Item]:
     """Turn Argon's video response plus the local video into Items with crops on disk.
 
     Args: text: pass-1 JSON; video: local video for ffmpeg; run_id: names the frames folder;
     locate: function(frame, [(item_id, label)]) -> {item_id: box}; defaults to the Argon still
-    pass (tests pass a fake). Returns: Items (status None until P2's resolve), one per entry
+    pass (tests pass a fake); refine: function(entries) -> {item_id: query}, defaults to the Hydrogen
+    query writer (runs at the same time as the box calls, so it adds no wait). Returns: Items (status None until P2's resolve), one per entry
     whose frame could be read. Items with no box get the full frame as their crop.
     Side effects: writes frames/<run_id>/<item_id>.jpg.
     """
     locate = locate or _locate_boxes
+    refine = refine or _refine_queries
     entries = []
     for e in parse_items(text):
         entries.append({**e, "item_id": f"i{len(entries) + 1}", "ts": float(e["timestamp_s"])})
@@ -205,10 +265,13 @@ def items_from_response(text: str, video: Path, run_id: str, locate=None) -> lis
         f = out_dir / f"_frame_{ts:.1f}.jpg"
         if _grab_frame(video, grp[0]["ts"], f):
             frames[ts] = f
-    with ThreadPoolExecutor(max_workers=BOX_WORKERS) as pool:
+    with ThreadPoolExecutor(max_workers=BOX_WORKERS + 1) as pool:
+        q_fut = pool.submit(refine, [{"item_id": e["item_id"], "label": e["label"], "attributes": e["attributes"]}
+                                      for e in entries])
         futs = {ts: pool.submit(locate, frames[ts], [(e["item_id"], e["label"]) for e in groups[ts]])
                 for ts in frames}
         boxes = {ts: fut.result() for ts, fut in futs.items()}
+        refined = q_fut.result()
 
     items: list[Item] = []
     for e in entries:
@@ -228,7 +291,7 @@ def items_from_response(text: str, video: Path, run_id: str, locate=None) -> lis
             "crop_path": crop_rel,
             "description": e["label"],
             "attributes": e["attributes"],
-            "query": build_query(e["label"], e["attributes"]),
+            "query": refined.get(e["item_id"]) or build_query(e["label"], e["attributes"]),
             "candidates": [], "status": None, "recovered": False,
             "preview": None, "cart": {"cart_id": None, "continue_url": None},
         })
