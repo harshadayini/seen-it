@@ -1,3 +1,5 @@
+> **REFERENCE ONLY, NOT AUTHORITATIVE.** Written for an earlier TypeScript/Express plan. `CLAUDE.md` wins on stack (Python/FastAPI backend, Next.js in `web/`), scope, models, file ownership and the data contract. Use this file for ideas only; do not build to it. Rules live in `AGENT_RULES.md`.
+
 # Interactive Mobile App UI/UX Design Prompt — Seen It (`UI_DESIGN_PROMPT.md`)
 
 Use the prompt below to design the **Seen It** **mobile app** interface (portrait `390×844` / `9:16` screens). It evolves the warm editorial palette of our earlier desktop reference (`/public/assets/aistudio/Screenshot_2026-11-21_at_11.50.05_AM_8796d7ce.png`) **without implementing it as-is**—translating it into an airy, thumb-friendly **mobile app** with minimal copy, cute **Cosmos (`cosmos.so`)** cutout icons, multi-product **Swap in Frame**, and the mobile-exclusive **Virtual Twin** camera mode that generates matched Shopify products directly in the user's real world.

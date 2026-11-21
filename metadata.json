@@ -1,6 +1,0 @@
-{
-  "name": "Seen It",
-  "description": "Omnimodal visual-commerce studio turning raw video, audio, songs, photos, and moodboards into calibrated Shopify UCP matches, multi-product frame swaps, and multi-merchant carts.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

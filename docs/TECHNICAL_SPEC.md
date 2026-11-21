@@ -1,3 +1,5 @@
+> **REFERENCE ONLY, NOT AUTHORITATIVE.** Written for an earlier TypeScript/Express plan. `CLAUDE.md` wins on stack (Python/FastAPI backend, Next.js in `web/`), scope, models, file ownership and the data contract. Use this file for ideas only; do not build to it. Rules live in `AGENT_RULES.md`.
+
 # Seen It — Technical Architecture & Specification (`TECHNICAL_SPEC.md`)
 
 This document specifies the complete technical architecture for **Seen It**, covering the Gemini 4 tiered escalation pipeline, Decisions API calibrated verification, multi-product scene-swap generation, Shopify Agentic Commerce (UCP) integration, compliance constraints, and breaking-point benchmarking.

@@ -1,3 +1,5 @@
+> **REFERENCE ONLY, NOT AUTHORITATIVE.** Written for an earlier TypeScript/Express plan. `CLAUDE.md` wins on stack (Python/FastAPI backend, Next.js in `web/`), scope, models, file ownership and the data contract. Use this file for ideas only; do not build to it. Rules live in `AGENT_RULES.md`.
+
 # Seen It — Product Design & Features (`Design.md`)
 
 > **One-liner:** Drop a messy video, voice memo, song, Pinterest board, photo, or text prompt—**Seen It** extracts every real-world item and vibe cue, verifies live Shopify catalog matches with calibrated probability scoring, swaps **multiple** matched products straight back into your frame, and builds ready-to-checkout multi-merchant carts via Shopify's Agentic Commerce stack (UCP).

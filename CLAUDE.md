@@ -5,7 +5,7 @@ Track: **Element 119** + **Shopify bonus**. Recording starts at **3:30 pm**.
 
 **Team:** **P1 = Harsha** (video understanding), **P2 = Sreeja** (matching and evaluation), **P3 = Rachael** (interface, cart, demo). Everywhere below, "P1/P2/P3" means these three people.
 
-Everyone reads this file first. If you change a contract, a function signature, or the scope, edit this file in the same PR.
+Everyone reads this file first, then `AGENT_RULES.md` (mandatory rules for secrets, Shopify compliance and code standards). Files in `docs/` are reference only and never override this file. If you change a contract, a function signature, or the scope, edit this file in the same PR.
 
 ---
 
@@ -119,7 +119,9 @@ Lives in `contracts/run.schema.json`, with a hand-written example in `fixtures/s
 
 ```
 seen-it/
-  CONTEXT.md              # this file
+  CLAUDE.md              # this file (source of truth)
+  AGENT_RULES.md         # compliance, secrets, logging, code standards (mandatory)
+  docs/                  # reference only, not authoritative (older TypeScript-era plan)
   .env.example
   contracts/              # run.schema.json (shared, PR-reviewed by all)
   fixtures/               # sample_run.json, test frames
@@ -181,7 +183,7 @@ Short-lived branches, trunk-based. `main` must always run.
 2. Commit small and often. Open a PR into `main` when something works end to end in your area.
 3. Before opening a PR: `git fetch && git rebase origin/main`, then run `scripts/smoke.sh` (it hits the stubs and the fixture).
 4. **Merge at least once per hour.** Fixed integration windows: **12:15, 1:00 (Checkpoint 1), 1:45, 2:15 (freeze)**. At each window everyone merges, pulls, and runs the full flow before going back to their own work.
-5. One reviewer is enough, except for `contracts/` and `CONTEXT.md`, which need all three. Skim-review and merge fast; it's a hackathon.
+5. One reviewer is enough, except for `contracts/` and `CLAUDE.md`, which need all three. Skim-review and merge fast; it's a hackathon.
 6. Never force-push `main`. Never commit `.env`, API keys, large videos, or merchant images (see section 8).
 7. If `main` breaks, whoever merged last fixes it immediately. Nobody else merges until it's green.
 8. After 2:15 only bug fixes and eval-driven fixes go in. No new features.

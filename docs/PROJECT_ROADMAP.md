@@ -1,3 +1,5 @@
+> **REFERENCE ONLY, NOT AUTHORITATIVE.** Written for an earlier TypeScript/Express plan. `CLAUDE.md` wins on stack (Python/FastAPI backend, Next.js in `web/`), scope, models, file ownership and the data contract. Use this file for ideas only; do not build to it. Rules live in `AGENT_RULES.md`.
+
 # Seen It — Project Context & Build Roadmap (`PROJECT_ROADMAP.md`)
 
 Welcome to the **Seen It** workspace. This base setup contains zero application code files by design—only the authoritative context, architecture, rules, and design prompt needed to execute cleanly.
