@@ -53,6 +53,7 @@ export function merchantName(domain: string | null | undefined): string {
 
 /** Readable title from a video id: "v_roomtour_01" -> "Roomtour 01". */
 export function humanize(id: string | null | undefined): string {
+  if (/^https?:\/\//i.test(id ?? "")) return "Your video";
   const words = (id ?? "").split("_").filter((w) => w && w !== "v");
   if (words.length === 0) return "Your video";
   const s = words.join(" ");

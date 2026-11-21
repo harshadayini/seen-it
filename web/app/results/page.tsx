@@ -42,6 +42,8 @@ export default function ResultsPage() {
         </p>
       </header>
 
+      <Link href="/scene" className="btn outline small walk">Walk through the scene</Link>
+
       {categories.length > 2 && (
         <div className="chips" role="group" aria-label="Filter by category">
           {categories.map((c) => (

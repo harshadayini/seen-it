@@ -9,15 +9,18 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Asset } from "./Asset";
+import type { AssetKey } from "@/lib/assets";
 
 interface Props {
   /** Published Spline scene URL (.splinecode), or empty to show the fallback. */
   scene: string;
   className?: string;
+  /** Still image shown until (or instead of) the live scene. */
+  fallback?: AssetKey;
 }
 
 /** @returns the live 3D scene when allowed, else the still fallback. */
-export function Spline3D({ scene, className = "" }: Props) {
+export function Spline3D({ scene, className = "", fallback = "heroObject" }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [visible, setVisible] = useState(false);
@@ -58,7 +61,7 @@ export function Spline3D({ scene, className = "" }: Props) {
 
   return (
     <div ref={box} className={`spline ${className}`} aria-hidden="true">
-      {!ready && <Asset name="heroObject" className="fill" decorative />}
+      {!ready && <Asset name={fallback} className="fill" decorative />}
       {visible && <canvas ref={canvas} className="spline-canvas" style={{ opacity: ready ? 1 : 0 }} />}
     </div>
   );

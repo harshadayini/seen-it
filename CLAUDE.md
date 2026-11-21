@@ -234,7 +234,7 @@ GEMINI_DECISION_MODEL=gemini-decision-1
 GEMINI_IMAGE_MODEL=           # current image-edit model ID
 SHOPIFY_CLIENT_ID=
 SHOPIFY_CLIENT_SECRET=
-SHOPIFY_AGENT_PROFILE_URL=https://shopify.dev/ucp/agent-profiles/examples/2026-04-08/cart-and-checkout.json
+SHOPIFY_AGENT_PROFILE_URL=https://shopify.dev/ucp/agent-profiles/examples/2026-04-08/valid-with-capabilities.json
 ```
 
 Tools needed: Python 3.11+, Node 20+, `ffmpeg`, `yt-dlp` (for downloading videos if Argon rejects YouTube links), the Shop CLI (`npm install --global @shopify/shop`).

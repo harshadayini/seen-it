@@ -21,7 +21,7 @@ export function TabBar() {
   return (
     <nav className="tabbar" aria-label="Main">
       {TABS.map(({ href, label, Icon }) => {
-        const active = href === "/" ? path === "/" || path === "/desk" : path.startsWith(href) || (href === "/results" && path === "/see-it");
+        const active = href === "/" ? path === "/" || path === "/desk" : path.startsWith(href) || (href === "/results" && (path === "/see-it" || path === "/scene"));
         return (
           <Link key={href} href={href} className={`tab ${active ? "on" : ""}`} aria-current={active ? "page" : undefined}>
             <Icon />

@@ -24,6 +24,10 @@ export interface Item {
   t_start?: number | null;
   t_end?: number | null;
   crop_path?: string | null;
+  /** OPTIONAL contract extension (not in run.schema.json yet): the full source frame the item was found in. */
+  frame_path?: string | null;
+  /** OPTIONAL contract extension: [ymin, xmin, ymax, xmax] on that frame, each 0..1. */
+  bbox?: number[] | null;
   description?: string | null;
   attributes?: Record<string, unknown> | null;
   query?: string | null;

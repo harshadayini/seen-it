@@ -32,17 +32,6 @@ export function fileUrl(path: string): string {
  */
 export const PREVIEW_PASS_FIDELITY = 0.8;
 
-/**
- * Where item boxes sit on the Scan image (percent of the image). PLACEHOLDER positions:
- * the run contract has no bounding boxes yet, so boxes are laid out by item order.
- */
-export const BOX_SLOTS = [
-  { top: 22, left: 8, w: 36, h: 70 },
-  { top: 60, left: 46, w: 30, h: 28 },
-  { top: 50, left: 80, w: 16, h: 17 },
-  { top: 64, left: 14, w: 26, h: 18 },
-] as const;
-
 /** Object-position values used to fake circular "crops" of the scan image until real crops exist. */
 export const CROP_POSITIONS = ["18% 62%", "58% 66%", "68% 32%", "28% 78%"] as const;
 
@@ -55,3 +44,14 @@ export const DESK_SAMPLE = {
     { name: "Wool desk rug", price: 34, style: 0.74, space: 0.77, category: "rugs" },
   ],
 } as const;
+
+/**
+ * Boxes for the SAMPLE scene art only: [ymin, xmin, ymax, xmax], 0..1. The contract has no
+ * bounding boxes yet, so real runs show each item's crop as its own frame instead.
+ */
+export const SAMPLE_BOXES: readonly (readonly [number, number, number, number])[] = [
+  [0.2, 0.07, 0.92, 0.38],
+  [0.58, 0.46, 0.9, 0.75],
+  [0.47, 0.8, 0.69, 0.96],
+  [0.78, 0.1, 0.96, 0.44],
+];

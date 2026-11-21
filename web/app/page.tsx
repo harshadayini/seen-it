@@ -1,20 +1,20 @@
 /**
- * Screen 1, Scan: a full-bleed scene with an oversized "seen it" wordmark straddling its edge,
- * numbered pins on found items, a short intake (Video / Photo / Desk, a link, one button), a
- * floating 3D object, and a quiet editorial band that shows the before/after and the three
- * outcomes.
- * Boundary: pin positions are placeholders (the contract has no bounding boxes yet). "Find items"
- * only starts a run when the backend is connected; otherwise it says so and Results shows the
- * sample run.
+ * Screen 1, Scan: a photo hero with an oversized "seen it" wordmark half in, half out of the
+ * image; a short intake beside a tilted product tray; a four-promise panel; then editorial
+ * sections for skincare, rooms, outfits and previews, in the Sage collage layout.
+ * Boundary: "Find items" only starts a run when the backend is connected; otherwise it says so
+ * and Results shows the sample run. Photos are local reference images (see lib/assets.ts).
  */
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Asset } from "@/components/Asset";
+import { Feature } from "@/components/Feature";
 import { ArrowIcon, BagIcon } from "@/components/Icons";
 import { Spline3D } from "@/components/Spline3D";
-import { API_URL, BOX_SLOTS, SPLINE_SCENES } from "@/lib/config";
+import { TrustPanel } from "@/components/TrustPanel";
+import { API_URL, SPLINE_SCENES } from "@/lib/config";
 import { useStore } from "@/lib/store";
 
 type Mode = "Video" | "Photo" | "Desk";
@@ -26,46 +26,35 @@ export default function ScanPage() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("Video");
   const [link, setLink] = useState("");
-  const items = run?.items ?? [];
 
   /** Starts a real run for the pasted link, then shows results as they arrive. */
   async function start() {
-    if (await startRun(link, "video")) router.push("/results");
+    const started = await startRun(link, "video");
+    // With a backend, follow the new run; without one, show the labelled sample scene.
+    if (started || !API_URL) router.push("/scene");
   }
 
   return (
     <main id="main" className="scan">
       <header className="nav">
         <span className="nav-logo" aria-hidden="true">s</span>
-        <span className="nav-title">{run ? `${items.length} items found` : "seen it"}</span>
+        <span className="nav-title">{run ? `${run.items.length} items found` : "scene-it"}</span>
         <Link href="/cart" className="nav-cart" aria-label={`Cart, ${lines.length} items`}>
           <BagIcon />
           {lines.length > 0 && <b className="count">{lines.length}</b>}
         </Link>
       </header>
 
-      <section className="hero" aria-label="Scanned scene">
+      <section className="hero" aria-label="Welcome">
         <div className="hero-img">
-          <Asset name="scanRoom" className="fill" />
-          {items.map((it, idx) => {
-            const slot = BOX_SLOTS[idx % BOX_SLOTS.length];
-            return (
-              <div
-                key={it.item_id}
-                className={`pin ${it.status === "none" ? "dashed" : ""}`}
-                style={{ top: `${slot.top}%`, left: `${slot.left}%`, width: `${slot.w}%`, height: `${slot.h}%` }}
-              >
-                <span className="pin-n num">{idx + 1}</span>
-              </div>
-            );
-          })}
+          <Asset name="heroWoman" className="fill" position="60% 30%" />
           {error && <p className="note on-image">Couldn&apos;t load the run: {error}</p>}
         </div>
-        <h1 className="wordmark">seen it</h1>
+        <h1 className="wordmark">scene-it</h1>
       </section>
 
       <section className="intro" aria-label="Start a scan">
-        <Spline3D scene={SPLINE_SCENES.hero} className="object" />
+        <Spline3D scene={SPLINE_SCENES.hero} fallback="tray" className="object" />
         <h2 className="h1">Every video becomes shoppable.</h2>
         <p className="body">Paste a link. We find each item and match it to real products.</p>
 
@@ -105,23 +94,46 @@ export default function ScanPage() {
         {startError && <p className="note" role="alert">{startError}</p>}
       </section>
 
-      <section className="gallery" aria-label="Before and after">
-        <figure className="shot"><Asset name="roomBefore" className="fill" /></figure>
-        <figure className="shot shifted"><Asset name="roomAfter" className="fill" /></figure>
-        <div className="gallery-copy">
-          <h2 className="h1">Exact, similar, or nothing.</h2>
-          <p className="body">We show how sure we are, then place it in your room.</p>
-        </div>
-      </section>
+      <TrustPanel />
 
-      <section className="band" aria-label="Found items">
-        <span className="ghost" aria-hidden="true">found</span>
-        <div className="band-tiles">
-          <Asset name="productFloorLamp" className="band-tile" />
-          <Asset name="productChair" className="band-tile" />
-          <Asset name="productVase" className="band-tile" />
-        </div>
-      </section>
+      <Feature
+        variant="pair"
+        title="Skincare, with receipts."
+        text={["Spot a bottle on someone’s shelf. We name it, price it, and say how sure we are.", "Not sure? We’ll admit that too."]}
+        tall={["skinSet", "skinShelf"]}
+        small="skinBasket"
+      />
+
+      <Feature
+        variant="collage"
+        ghost="room"
+        title="Rooms, decoded."
+        text={[
+          "The lamp in the corner of someone’s tour now has a name, a shop and a price.",
+          "Found a cousin, not the twin? We’ll say so.",
+        ]}
+        wide="roomChair"
+        low="roomGreen"
+        cta={{ label: "Try a room", href: "/results" }}
+      />
+
+      <Feature
+        variant="pair"
+        title="The coat you can’t stop thinking about."
+        text={["Seen on a crosswalk, a reel, a friend. We find the real one, or its closest relative.", "Cut and colour, not just “beige coat”."]}
+        tall={["fitParis", "fitRackHat"]}
+        small="fitRackPlant"
+      />
+
+      <Feature
+        variant="collage"
+        ghost="try"
+        title="Try it before it’s yours."
+        text={["See the piece in your own room first.", "Slide to compare. Keep it, or don’t."]}
+        wide="roomBrown"
+        low="roomColor"
+        cta={{ label: "Preview one", href: "/see-it" }}
+      />
     </main>
   );
 }
