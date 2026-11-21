@@ -1,124 +1,85 @@
 /**
- * Screen 2, Results: a ghost-word header, category filters, then a two-column shelf of found
- * items. Each card is a product on a tinted tile with its real crop as a small badge, a
- * plain-word confidence pill, store and price. "No match" is shown honestly.
- * A sticky bar adds the selected items to the cart.
- * Boundary: reads the shared store only; crops fall back to placeholders until the backend
- * supplies them.
+ * Screen 2, Results: your video on the left, the items found on the right (stacked on a phone).
+ * While the run is processing it shows real progress ("Found 10 items. Matching 4 of 10.") and
+ * each item turns into a card the moment its own state is "done". Every state has a screen:
+ * nothing scanned, cannot reach the server, run failed, no items found.
+ * A footer shows what is in the cart and leads to it.
+ * Boundary: reads the shared store only; "Try again" restarts the whole run with the same video
+ * (no per-item backend endpoint exists).
  */
 "use client";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { CropImage, ProductImage } from "@/components/Asset";
-import { ConfidencePill } from "@/components/ConfidencePill";
+import { useState } from "react";
 import { EmptyRun } from "@/components/EmptyRun";
-import { CheckIcon, PlusIcon } from "@/components/Icons";
-import { StoreLink } from "@/components/StoreLink";
-import { CROP_POSITIONS } from "@/lib/config";
-import { bestCandidate, fmtPrice, fmtRange, fmtTime, humanize, merchantName } from "@/lib/format";
+import { ItemCard } from "@/components/ItemCard";
+import { RunProgress } from "@/components/RunProgress";
+import { VideoPane } from "@/components/VideoPane";
+import { fmtPrice } from "@/lib/format";
 import { useStore } from "@/lib/store";
+
+/** Full-screen message with one retry action. @param title headline @param body one plain sentence */
+function Problem({ title, body, action, onAction }: { title: string; body: string; action: string; onAction: () => void }) {
+  return (
+    <main id="main" className="screen results">
+      <header className="head"><h1 className="h1">{title}</h1><p className="meta">{body}</p></header>
+      <button type="button" className="btn primary" onClick={onAction}>{action}</button>
+      <Link href="/" className="link">Use a different video</Link>
+    </main>
+  );
+}
 
 /** @returns the Results screen. */
 export default function ResultsPage() {
-  const { run, error, idle, selectedIds, toggle, lines, total } = useStore();
-  const [filter, setFilter] = useState("All");
-
-  const categories = useMemo(() => {
-    const set = new Set((run?.items ?? []).map((i) => String(i.attributes?.category ?? "")).filter(Boolean));
-    return ["All", ...set];
-  }, [run]);
+  const { run, error, idle, selectedIds, toggle, lines, total, startedAt, finishedAt, retryRun } = useStore();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   if (idle) return <EmptyRun />;
-  if (error && !run) return <main id="main" className="screen"><p className="note">Couldn&apos;t load the run: {error}</p></main>;
-  if (!run) return <main id="main" className="screen"><p className="note">Loading…</p></main>;
+  if (error && !run) {
+    return <Problem title="Can't reach the app right now" body="We'll keep trying. You can also try again yourself." action="Try again" onAction={() => window.location.reload()} />;
+  }
+  if (!run) return <main id="main" className="screen results"><p className="note" role="status">Loading…</p></main>;
+  if (run.state === "failed") {
+    return <Problem title="We couldn't finish watching this video" body="Nothing was added to your cart." action="Try again" onAction={() => void retryRun()} />;
+  }
+  if (run.state === "done" && run.items.length === 0) {
+    return <Problem title="We didn't find any products in this video" body="Try a video where the products are clearly in view." action="Try again" onAction={() => void retryRun()} />;
+  }
 
-  const items = run.items.filter((i) => filter === "All" || String(i.attributes?.category) === filter);
+  const selected = run.items.find((i) => i.item_id === selectedId) ?? null;
+  const firstDone = run.items.find((i) => i.state === "done" && i.crop_path) ?? null;
 
   return (
-    <main id="main" className="screen">
+    <main id="main" className="screen results">
       <header className="head">
-        <span className="ghost" aria-hidden="true">found</span>
-        <h1 className="h1 over">{humanize(run.source.video_id)}</h1>
-        <p className="meta num over">
-          {run.items.length} items{run.source.duration_s != null ? ` · ${fmtTime(run.source.duration_s)}` : ""}
-          {run.state === "processing" ? " · still looking" : ""}
-        </p>
+        <h1 className="h1">What we found</h1>
       </header>
+      <RunProgress run={run} startedAt={startedAt} finishedAt={finishedAt} />
 
-      <Link href="/scene" className="btn outline small walk">Walk through the scene</Link>
-
-      {categories.length > 2 && (
-        <div className="chips" role="group" aria-label="Filter by category">
-          {categories.map((c) => (
-            <button key={c} type="button" className={`chip ${filter === c ? "on" : ""}`} aria-pressed={filter === c} onClick={() => setFilter(c)}>
-              {c}
-            </button>
+      <div className="results-grid">
+        <VideoPane source={run.source.video_id} item={selected} fallback={firstDone} />
+        <ul className="items" aria-label="Items found in your video">
+          {run.items.map((it) => (
+            <ItemCard
+              key={it.item_id}
+              item={it}
+              selected={it.item_id === selectedId}
+              inCart={selectedIds.includes(it.item_id)}
+              onSelect={() => setSelectedId(it.item_id)}
+              onToggleCart={() => toggle(it.item_id)}
+              onRetry={() => void retryRun()}
+            />
           ))}
-        </div>
-      )}
-
-      <ul className="grid">
-        {items.map((it, i) => {
-          const best = bestCandidate(it);
-          const none = it.status === "none";
-          const looking = !it.status;
-          const buyable = !none && !looking && !!best?.variant_id;
-          const inCart = selectedIds.includes(it.item_id);
-          const category = String(it.attributes?.category ?? "");
-          return (
-            <li key={it.item_id} className={`card ${none ? "none" : ""}`}>
-              <div className="tile-wrap">
-                {none || looking ? (
-                  <div className="tile empty"><CropImage path={it.crop_path} className="fillcrop" position={CROP_POSITIONS[i % CROP_POSITIONS.length]} /></div>
-                ) : (
-                  <ProductImage url={best?.image_url} alt={best?.title ?? ""} category={category} />
-                )}
-                {!none && !looking && (
-                  <CropImage path={it.crop_path} className="crop-badge" position={CROP_POSITIONS[i % CROP_POSITIONS.length]} />
-                )}
-                {buyable && (
-                  <button
-                    type="button"
-                    className={`round add ${inCart ? "on" : ""}`}
-                    aria-pressed={inCart}
-                    aria-label={inCart ? `Remove ${best?.title} from cart` : `Add ${best?.title} to cart`}
-                    onClick={() => toggle(it.item_id)}
-                  >
-                    {inCart ? <CheckIcon /> : <PlusIcon />}
-                  </button>
-                )}
-              </div>
-              <ConfidencePill status={it.status} p={best?.p_same_product} />
-              {none ? (
-                <>
-                  <h2 className="card-title muted">{it.description}</h2>
-                  <p className="sub">Nothing was trusted enough to show.</p>
-                </>
-              ) : looking ? (
-                <>
-                  <h2 className="card-title">{it.description}</h2>
-                  <p className="sub">Searching the catalog…</p>
-                </>
-              ) : (
-                <>
-                  <h2 className="card-title">{best?.title ?? it.description}</h2>
-                  <p className="sub">
-                    {merchantName(best?.merchant_domain)} · <span className="num">{fmtPrice(best?.price, best?.currency)}</span>
-                  </p>
-                  {it.recovered && <span className="signal">Found on second look</span>}
-                  <Link href={`/see-it?item=${it.item_id}`} className="link">See it here</Link>
-                  <StoreLink candidate={best} />
-                </>
-              )}
-              <p className="when num">{fmtRange(it.t_start, it.t_end)}</p>
-            </li>
-          );
-        })}
-      </ul>
+        </ul>
+      </div>
 
       <div className="stickybar">
-        <Link href="/cart" className={`btn primary wide ${lines.length === 0 ? "disabled" : ""}`} aria-disabled={lines.length === 0}>
-          <span>Add {lines.length} to cart</span>
+        <Link
+          href="/cart"
+          className={`btn primary wide ${lines.length === 0 ? "disabled" : ""}`}
+          aria-disabled={lines.length === 0}
+          tabIndex={lines.length === 0 ? -1 : undefined}
+        >
+          <span>{lines.length === 0 ? "Review cart" : `Review cart · ${lines.length} ${lines.length === 1 ? "item" : "items"}`}</span>
           <span className="num">{fmtPrice(total)}</span>
         </Link>
       </div>
