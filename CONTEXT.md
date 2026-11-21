@@ -9,11 +9,12 @@ Everyone reads this file first. If you change a contract, a function signature, 
 
 ## 1. What we're building
 
-Drop in a video or photo. The app finds what's **in** it (or what's **missing** from it), matches each item to real Shopify products with honest confidence scores, previews the products in your own scene, and builds the cart.
+Drop in a video or photo, or just point your camera. The app finds what's in it (or what's missing from it), matches each item to real Shopify products with honest confidence scores, then drops those products into a virtual twin of your own space, scaled to its real dimensions, so you know they fit before you buy. It builds the cart.
+The virtual twin: Every space you film becomes a twin with real measurements, so you can see one product in your desk, bedroom and living room at once, each with a fit verdict.
 
-Pitch line: **"Every video becomes shoppable, with confidence you can trust."**
+Pitch line: "Every video becomes shoppable, with confidence you can trust."
 
-Why it fits Element 119: a text description throws away the exact color, finish and shape that identify a product. The input is messy by nature (motion blur, quick cuts, half-hidden items). We push it until it breaks, show where, and show how it recovers.
+Why it fits Element 119: A text description throws away the exact color, finish, shape and size that identify a product and decide whether it fits a room. The input is messy by nature (motion blur, quick cuts, half-hidden items, bad light), and voice and pointing drive it. We push it until it breaks, show where, and show how it recovers.
 
 ### Rules from the participant guide (do not violate)
 - Use **at least two Gemini 4 models** (Argon, Carbon, Neon, Hydrogen), each with a clear job. Carbon is limited to approved cyber testers, so use Argon plus Hydrogen or Neon.
