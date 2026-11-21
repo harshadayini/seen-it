@@ -10,6 +10,7 @@ print the user's media in logs. Failures raise SceneError with a plain message.
 import logging
 import re
 import secrets
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -61,6 +62,20 @@ def _save_frame(src: Path, t: float | None, out: Path) -> bool:
     return r.returncode == 0 and out.exists() and out.stat().st_size > 100
 
 
+def _convert_with_sips(src: Path, out: Path) -> bool:
+    """Convert an image ffmpeg cannot read (an iPhone HEIC/HEIF photo) to a JPEG with macOS `sips`.
+
+    Returns True if out was written. Returns False when sips is missing (not macOS) or the file is not an image.
+    The output is scaled to at most MAX_SCENE_PX on its longest side.
+    """
+    if shutil.which("sips") is None:
+        return False
+    heic = src.with_suffix(".heic")  # sips picks the reader from the content, the name is only a hint
+    shutil.copyfile(src, heic)
+    r = _run(["sips", "-s", "format", "jpeg", "-Z", str(MAX_SCENE_PX), str(heic), "--out", str(out)], timeout=60)
+    return r.returncode == 0 and out.exists() and out.stat().st_size > 100
+
+
 def save_scene(data: bytes) -> dict:
     """Store an uploaded photo or video and extract its scene frame(s).
 
@@ -92,6 +107,11 @@ def save_scene(data: bytes) -> dict:
                 out = folder / f"f{n}.jpg"
                 if _save_frame(raw, t, out):
                     frames.append(f"previews/scenes/{scene_id}/f{n}.jpg")
+            if not frames:  # ffmpeg could not decode it: try an iPhone HEIC/HEIF photo with macOS sips
+                out = folder / "f0.jpg"
+                if _convert_with_sips(raw, out):
+                    frames, kind = [f"previews/scenes/{scene_id}/f0.jpg"], "image"
+                    log.info("scene %s converted with sips (HEIC)", scene_id)
             if not frames:
                 raise SceneError("that file is not a photo or video we can read")
     except SceneError:
